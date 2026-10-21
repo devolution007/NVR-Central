@@ -52,8 +52,10 @@ def test_settings_reject_weak_or_inconsistent_config() -> None:
     with pytest.raises(ValidationError):
         Settings(**{**base, "encryption_key": "not-a-fernet-key"})
     with pytest.raises(ValidationError):
-        Settings(**{**base, "environment": "production", "cookie_secure": False})
-    Settings(**{**base, "environment": "production", "cookie_secure": True})
+        Settings(**{**base, "environment": "production", "cookie_secure": False, "allow_loopback_nvr_hosts": False})
+    with pytest.raises(ValidationError, match="ALLOW_LOOPBACK"):
+        Settings(**{**base, "environment": "production", "cookie_secure": True, "allow_loopback_nvr_hosts": True})
+    Settings(**{**base, "environment": "production", "cookie_secure": True, "allow_loopback_nvr_hosts": False})
 
 
 def test_backup_policy_defaults_to_substream_and_disabled(db) -> None:

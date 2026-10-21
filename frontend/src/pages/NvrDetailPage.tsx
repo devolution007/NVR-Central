@@ -57,7 +57,7 @@ export function NvrDetailPage() {
       <PageHeader title={n.name} description={`${n.campus_name} · ${n.connection_type === 'p2p' ? 'P2P' : `${n.host}:${n.http_port}`}`} actions={admin && <NvrActions nvr={n} labelled />} />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
+        <Card className="min-w-0 lg:col-span-1">
           <CardHeader>
             <CardTitle className="text-base">Status</CardTitle>
           </CardHeader>
@@ -79,7 +79,7 @@ export function NvrDetailPage() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card className="min-w-0 lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">What this NVR can do</CardTitle>
             <p className="text-sm text-muted-foreground">Only things observed working on this NVR show as Verified. Anything else is not claimed.</p>
@@ -88,6 +88,7 @@ export function NvrDetailPage() {
             {caps.error ? (
               <ErrorState message={errorMessage(caps.error)} />
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableBody>
                   {caps.data?.map((c) => (
@@ -107,6 +108,7 @@ export function NvrDetailPage() {
                   )}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

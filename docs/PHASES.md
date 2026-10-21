@@ -72,7 +72,7 @@ Costs and risks to be honest about:
 
 **Result:** gate met. Backend 51 tests, frontend 30 tests, ruff/mypy-strict/tsc/oxlint clean. See `README.md` and `docs/architecture.md`. Decision recorded: camera backup stream is selectable per camera (`sub` default, `main` optional); the selection UI arrives in Phase 4.
 
-## Phase 2 — Campus Connectivity & NVR Inventory
+## Phase 2 — Campus Connectivity & NVR Inventory  (BUILT 2026-10-21, awaiting your sign-off)
 **2A — Tunnel infrastructure**
 - WireGuard hub in docker-compose (Linux) with a documented Windows dev setup.
 - Peer management: create a campus peer, generate keys and a downloadable config / QR, assign tunnel address, revoke.
@@ -85,6 +85,10 @@ Costs and risks to be honest about:
 - Celery registration workflow: connect, detect model, capabilities, discover channels, persist cameras (no duplicates, keep policies, mark missing cameras unavailable).
 - NVR statuses, test / reconnect / discover endpoints, meaningful errors, redacted logs.
 - UI: Campus connectivity page, NVR management, Camera Management inventory.
+
+**Result (honest status):**
+- 2B (adapter, workflow, discovery, inventory UI): built and tested. The Dahua adapter was run read-only against the real NVR and found the right 13 cameras; the full Celery workflow and UI were exercised against a SIMULATED NVR. **The full app workflow was then run once against the real NVR (2026-10-21, one Reconnect from the UI/API): status Connected, model and firmware read, UTC+05:00, 13 cameras (12 online, 1 not responding), capabilities as expected, download not tested.**
+- 2A (tunnels): peer management, key and config generation, hub compose overlay and health parsing are built and unit tested. **Nothing has been brought up against a real hub or campus device.** See docs/tunnel.md.
 
 **Gate:** the first vertical slice from the spec works on the real NVR through a tunnel: login, campus, tunnel peer, add NVR, diagnostics, camera discovery, DB, inventory page.
 

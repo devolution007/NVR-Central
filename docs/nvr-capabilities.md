@@ -69,3 +69,25 @@ Status: **verified** = observed working on this NVR; **partial** = worked with l
 4. **Timezone conversion** needs the NVR's TimeZone enum mapped to a UTC offset and stored per NVR.
 5. **Camera online state** cannot be read from `getCameraAll`. Use a live probe (RTSP or snapshot) and show "unknown" until probed.
 6. **Open tests:** 16 concurrent substreams, parallel downloads, full-hour download integrity and speed, camera online state, other NVR models.
+
+## Adapter verification and the lockout incident (2026-10-21, later)
+
+**Adapter run against the real NVR (read-only, correct credentials).** `DahuaDirectAdapter` returned: model
+`DHI-NVR2116HS-4KS3`, firmware `4.005.0000000.7.R`, clock offset **UTC+05:00 measured from the NVR clock** (matching
+timezone code 7, no warnings), and **13 cameras** (channels 1 to 13). Channels 1 to 12 answered RTSP DESCRIBE and
+snapshots; channel 13 ("CAM 1", a configured camera of another type with no model string) did not answer within the
+4 s timeout; channels 14 to 16 are disabled slots and are correctly not listed. This confirmed that **entry N of
+`getCameraAll` is channel N+1**, and that disabled slots must be filtered on `DeviceInfo.Enable`, not only on the
+address. Capabilities: device info, channel discovery, live video, recording search and snapshot verified; recording
+download not tested (deliberately); P2P not used. All of this was with the earlier read-only diagnostic and adapter
+runs, before the lockout below.
+
+**Account lockout (important).** After roughly ten failed logins sent by a mis-configured set of automated tests
+(since fixed and guarded against), the NVR answered **HTTP 403** to every request, including a correct login. That is
+how this NVR reports a locked account (it has `LockLoginEnable=true`). The adapter now maps 403 to an authentication
+error that says the account is probably locked and not to retry. Consequences for the design:
+- an auth failure is never retried automatically, and periodic checks skip NVRs in `auth_failed`;
+- the UI asks for confirmation before retesting an NVR whose credentials were rejected;
+- tests can no longer reach any non-loopback address (`tests/support/scripted.py: NetworkBlockedAdapter`).
+
+Open: how long the lock lasts on this firmware (not measured) and whether DMSS or the web UI are affected while it holds.

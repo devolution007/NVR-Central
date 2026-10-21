@@ -159,9 +159,10 @@ def _make_handler(nvr: SimNvr) -> type[BaseHTTPRequestHandler]:
 
 
 class FakeDahuaServer:
-    def __init__(self, nvr: SimNvr) -> None:
+    def __init__(self, nvr: SimNvr, http_port: int = 0, rtsp_port: int = 0) -> None:
         self.nvr = nvr
-        self._http = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(nvr))
+        self._rtsp_bind = rtsp_port
+        self._http = ThreadingHTTPServer(("127.0.0.1", http_port), _make_handler(nvr))
         self.http_port: int = self._http.server_address[1]
         self.rtsp_port: int = 0
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -229,7 +230,7 @@ class FakeDahuaServer:
 
         async def main() -> None:
             self._stop = asyncio.Event()
-            server = await asyncio.start_server(handle, "127.0.0.1", 0)
+            server = await asyncio.start_server(handle, "127.0.0.1", self._rtsp_bind)
             self.rtsp_port = server.sockets[0].getsockname()[1]
             self._ready.set()
             await self._stop.wait()

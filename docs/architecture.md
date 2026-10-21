@@ -32,6 +32,17 @@ Tables from the spec that arrive in later phases: `nvr_capabilities`, `nvr_conne
 ## Known limitations
 
 - Behind a reverse proxy the audit log and login limiter see the proxy IP. Phase 5 adds trusted forwarded headers.
-- Nothing contacts an NVR yet. NVRs stay `pending` ("Not tested").
+- (Phase 1 note, superseded) NVRs are now contacted by the Phase 2 workflow; see Phase 2 additions below.
 - The user-management UI is Phase 5; the API exists (`/api/v1/users`).
 - The frontend bundle is one 737 kB chunk; route-level code splitting comes with the live-view work.
+
+
+# Phase 2 additions
+
+- **Adapter layer** (`backend/app/integrations`): `NvrAdapter` contract, `DahuaDirectAdapter` (HTTP CGI with digest auth plus RTSP DESCRIBE), a disabled `DahuaP2pAdapter`, a host guard (loopback, link-local, multicast and reserved addresses refused), and a factory. Adapters never touch the database.
+- **Workflow** (`services/nvr_ops.py`, Celery in `workers/`): one in-flight operation per NVR via an atomic claim on `status=connecting` (a claim older than 3 minutes is treated as a dead worker). Transient network failures retry twice, authentication failures never retry. Cameras are upserted by (NVR, channel), never deleted, preserved with their policies, and marked `unavailable` when the NVR stops reporting them.
+- **Timezone**: stored `utc_offset_minutes` is *measured* from the NVR clock rounded to 15 minutes. Dahua's zone code is kept and used only to warn on disagreement. Only code 7 is hardware-verified.
+- **Capabilities** are per NVR and per operation: `supported_tested`, `unsupported` or `unknown`. A failed live probe is `unknown`, never `unsupported`. Download is `unknown` until something actually downloads.
+- **Credential safety**: `auth_failed` pauses periodic checks; the API requires `?force=true` to retest; 403 is treated as a locked account.
+- **Tunnels**: see docs/tunnel.md.
+- **Test safety**: every test is blocked from non-loopback addresses by default, and the Dahua simulator (`tests/support/fake_dahua.py`) is clearly labelled simulated.

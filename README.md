@@ -2,7 +2,7 @@
 
 Self-hosted web app for managing Dahua NVRs across multiple campuses: central live monitoring and SFTP backups.
 
-**Status:** Phase 1 (foundation) complete. Live video, discovery and backups are not built yet. See [docs/PHASES.md](docs/PHASES.md).
+**Status:** Phase 2 built (NVR connection tests, camera discovery, campus tunnel management). Live video and backups are not built yet. See [docs/PHASES.md](docs/PHASES.md).
 
 | Area | Stack |
 |---|---|
@@ -25,9 +25,18 @@ cd backend
 .\.venv\Scripts\python -m app.cli create-admin --username yourname     # prompts for a password (12+ chars)
 .\.venv\Scripts\uvicorn app.main:app --reload                          # API on http://127.0.0.1:8000
 
+cd ..\backend
+.\.venv\Scripts\celery -A app.workers.celery_app worker --pool=solo --loglevel=info   # background worker
+
 cd ..\frontend
 npm run dev                                                            # UI on http://localhost:5173
 ```
+
+NVR connection tests and camera discovery run in the Celery worker, so keep it running (and Redis up), or the Test/Discover buttons report the queue as unavailable. Optional scheduler for periodic health checks: `celery -A app.workers.celery_app beat`.
+
+**Trying it without hardware:** `backend\.venv\Scripts\python scripts\sim_nvr.py` starts a clearly labelled SIMULATED NVR on `127.0.0.1` (HTTP 18080, RTSP 18554, user `admin`, password `secret`). Register it with connection type "Direct LAN", address `127.0.0.1`. This needs `ALLOW_LOOPBACK_NVR_HOSTS=true` (development only, refused in production).
+
+**Never point tests or experiments at a real NVR with wrong credentials.** Dahua NVRs lock the account after a few failed logins, which also blocks DMSS. The app does not retry rejected credentials automatically.
 
 Open **http://localhost:5173** (use `localhost`). The Vite dev server proxies `/api` to the backend so session cookies stay same-origin. API docs: http://127.0.0.1:8000/api/docs (development only).
 

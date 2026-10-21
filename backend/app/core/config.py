@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     def _production_requires_secure_cookies(self) -> "Settings":
         if self.environment == "production" and not self.cookie_secure:
             raise ValueError("COOKIE_SECURE must be true when ENVIRONMENT=production")
+        if self.environment == "production" and self.allow_loopback_nvr_hosts:
+            raise ValueError("ALLOW_LOOPBACK_NVR_HOSTS must be false when ENVIRONMENT=production")
         return self
 
     @property

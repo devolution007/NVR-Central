@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSessionBootstrap } from '@/features/auth/api'
 import { AppLayout } from '@/layouts/AppLayout'
 import { PLANNED_PAGES } from '@/layouts/nav'
@@ -16,7 +17,7 @@ import { ProtectedRoute } from '@/routes/ProtectedRoute'
 export default function App() {
   useSessionBootstrap()
   return (
-    <>
+    <TooltipProvider delayDuration={200}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute />}>
@@ -35,6 +36,6 @@ export default function App() {
         </Route>
       </Routes>
       <Toaster richColors closeButton />
-    </>
+    </TooltipProvider>
   )
 }
