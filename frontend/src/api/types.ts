@@ -140,7 +140,7 @@ export interface Capability {
   checked_at: string | null
 }
 
-export type PeerMode = 'connector' | 'router'
+export type PeerMode = 'windows' | 'connector' | 'router'
 export type PeerStatus = 'connected' | 'stale' | 'never_connected' | 'unknown' | 'revoked'
 
 export interface TunnelHub {
@@ -175,13 +175,21 @@ export interface PeerInput {
   campus_id: string
   name: string
   mode: PeerMode
-  lan_cidr: string
+  lan_cidr?: string
   public_key?: string
+  /** Windows mode: the NVR's real LAN address and ports, used to build the forwarding script. */
+  nvr_host?: string
+  nvr_http_port?: number
+  nvr_rtsp_port?: number
 }
 
 export interface PeerCreated {
   peer: TunnelPeer
-  config: string | null
+  config: string
+  /** wg_quick: a ready config file with the generated private key. settings: a sheet for peers that made their own key. */
+  config_kind: 'wg_quick' | 'settings'
+  script: string | null
+  script_name: string | null
   private_key_shown_once: boolean
   warnings: string[]
 }

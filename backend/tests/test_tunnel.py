@@ -121,7 +121,18 @@ def test_router_peers_cannot_overlap_and_use_the_real_lan(admin_api: Api, db) ->
     a, b = str(make_campus(db, "A").id), str(make_campus(db, "B").id)
     _, pub = tunnel.generate_keypair()
     r1 = create(admin_api, a, mode="router", public_key=pub)
-    assert r1["config"] is None and r1["private_key_shown_once"] is False  # router generated its own key
+    assert r1["private_key_shown_once"] is False  # the router generated its own key
+    # ...but the pre-shared key the hub requires must still reach it, once, or the handshake can never succeed
+    assert (
+        r1["config_kind"] == "settings"
+        and "Pre-shared key:" in r1["config"]
+        and "Allowed IPs:           10.77.0.1/32" in r1["config"]
+    )
+    psk = next(
+        ln.split(":", 1)[1].strip() for ln in r1["config"].splitlines() if ln.strip().startswith("Pre-shared key")
+    )
+    assert f"PresharedKey = {psk}" in admin_api.get("/api/v1/tunnel/hub-config").text  # hub and router agree
+    assert "PrivateKey" not in r1["config"].replace(get_settings().wg_hub_private_key, "")
     assert r1["peer"]["virtual_subnet"] == "192.168.15.0/24"
     _, pub2 = tunnel.generate_keypair()
     clash = admin_api.post("/api/v1/tunnel/peers", json={"campus_id": b, "name": "B", "mode": "router",

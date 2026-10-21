@@ -77,5 +77,6 @@ class CapabilityStatus(StrEnum):
 
 
 class PeerMode(StrEnum):
+    WINDOWS = "windows"  # an always-on Windows PC: WireGuard for Windows plus netsh port forwarding to the NVR
     CONNECTOR = "connector"  # small always-on box running our WireGuard + NAT setup
     ROUTER = "router"  # the campus router holds the tunnel (its own WireGuard client)

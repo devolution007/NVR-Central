@@ -19,11 +19,14 @@ class PeerCreate(BaseModel):
     campus_id: uuid.UUID
     name: str = Field(min_length=1, max_length=128)
     mode: PeerMode = PeerMode.CONNECTOR
-    lan_cidr: str = Field(
-        min_length=7, max_length=18, description="The campus LAN as it really is, e.g. 192.168.15.0/24"
-    )
+    # The campus LAN as it really is, e.g. 192.168.15.0/24. Optional for Windows mode (derived from nvr_host).
+    lan_cidr: str | None = Field(default=None, max_length=18)
     # Optional: supply the public key of a peer that generated its own keypair (recommended for routers).
     public_key: str | None = Field(default=None, max_length=64)
+    # Windows mode only: the NVR's real LAN address and ports, used to build the port-forwarding script.
+    nvr_host: str | None = Field(default=None, max_length=15)
+    nvr_http_port: int = Field(default=80, ge=1, le=65535)
+    nvr_rtsp_port: int = Field(default=554, ge=1, le=65535)
 
 
 class PeerOut(BaseModel):
@@ -47,7 +50,12 @@ class PeerOut(BaseModel):
 
 class PeerCreated(BaseModel):
     peer: PeerOut
-    # Present only when the server generated the keypair. It is shown once and not stored anywhere.
-    config: str | None
+    # Shown once and not retrievable later. `wg_quick` is a ready config file containing the generated private key;
+    # `settings` is a sheet for peers that made their own key and still need the pre-shared key.
+    config: str
+    config_kind: str  # wg_quick | settings
+    # Windows mode: PowerShell that forwards the NVR's ports from the tunnel address. Run as Administrator.
+    script: str | None = None
+    script_name: str | None = None
     private_key_shown_once: bool
     warnings: list[str]

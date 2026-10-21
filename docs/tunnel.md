@@ -56,6 +56,42 @@ docker compose -f docker-compose.yml -f docker-compose.tunnel.yml --profile app 
    `systemctl enable wg-quick@wg0`.
 6. Register the NVR at its tunnel address (connector) or real LAN address (router) and run **Test connection**.
 
+## Windows PC mode in detail (UNVERIFIED)
+
+For campuses without a Linux box or a WireGuard-capable router. An always-on Windows 10/11 PC on the campus LAN runs
+WireGuard for Windows and **forwards the NVR's ports** from its tunnel address with `netsh interface portproxy`. There
+is no NETMAP on Windows, so the app addresses the NVR at the PC's **tunnel address**, not a virtual range.
+
+1. Install WireGuard for Windows.
+2. In the app: **Add campus tunnel**, type *Windows PC*, the NVR's real LAN address (and its HTTP/RTSP ports if not
+   80/554). Leave the public key blank: the app generates a keypair and a ready `.conf`.
+3. Save what is shown **once**: the WireGuard config (import it in WireGuard for Windows and activate it, then install
+   the tunnel as a service) and the **PowerShell script**.
+4. Run the script in PowerShell **as Administrator**, after the tunnel is active. It forwards the ports, starts the IP
+   Helper service, allows only the hub (`10.77.0.1`) through the Windows firewall, and adds a startup task that restarts
+   IP Helper a minute after boot so the forwarder binds even when the tunnel came up late.
+5. Restart the hub, then register the NVR in the app as *Campus tunnel* at the **tunnel address** (for example
+   `10.77.0.2`) with the same ports, and run Test connection.
+
+Properties and limits:
+- Overlapping campus LAN ranges are fine: each PC exposes only its own tunnel address.
+- One NVR per set of forwarded ports. For a second NVR behind the same PC, forward different ports (for example 8080
+  and 8554) and enter them when registering it.
+- The PC must stay on and logged in or have the WireGuard tunnel installed as a service.
+- Only TCP is forwarded (HTTP and RTSP over TCP). That is all the app uses today.
+- The generated script passes PowerShell's own syntax check. It has not been run on a real PC.
+
+## Router mode in detail (UNVERIFIED)
+
+1. On the campus router, generate a WireGuard keypair (most routers have a "generate" button). Keep the private key on the router.
+2. In the app: **Add campus tunnel**, type *router*, the campus LAN as a /24, and paste the router's **public** key.
+3. The app shows a settings sheet **once**: tunnel address, hub public key, **pre-shared key**, endpoint, allowed IPs. The pre-shared key is required: the hub config contains it, so without it the handshake fails.
+4. Enter them on the router: interface address `10.77.0.<N+1>/32`; peer = the hub with the key, pre-shared key and endpoint; allowed IPs `10.77.0.1/32` only; keepalive 25 s.
+5. Firewall: allow traffic from `10.77.0.1` into the campus LAN, and do not route all traffic through the tunnel.
+6. Restart the hub's `wireguard` container, then register the NVR at its **real LAN address** and run Test connection.
+
+Router mode needs each router-mode campus to have a different LAN range. If two campuses share a range, use a connector instead.
+
 ## Tunnel health
 
 The worker runs `wg show <interface> dump` every minute and stores the last handshake and byte counters. This only works
@@ -70,6 +106,7 @@ does). Otherwise peers show **Unknown**, which is deliberately different from do
 - Reload behaviour of the hub after config changes.
 - Throughput and the live-view limits over a real campus uplink (Phase 3).
 - Raspberry Pi or mini PC connector images (not built; the config is plain `wg-quick`).
+- The Windows script actually forwarding after a reboot (IP Helper binding to a tunnel address that appears late).
 
 Key derivation is verified against the RFC 7748 Curve25519 test vector, and the `wg show ... dump` parser, address
 allocation, overlap rules, revoke and config text are unit tested.

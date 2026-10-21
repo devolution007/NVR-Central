@@ -22,13 +22,32 @@ import { useCampuses } from '@/features/campuses/api'
 import { fetchHubConfig, useCreatePeer, useHub, usePeers, useRevokePeer } from '@/features/tunnel/api'
 import { formatBytes, timeAgo } from '@/lib/format'
 
-export const peerSchema = z.object({
-  campus_id: z.string().min(1, 'Choose a campus'),
-  name: z.string().trim().min(1, 'Name is required').max(128),
-  mode: z.enum(['connector', 'router']),
-  lan_cidr: z.string().trim().regex(/^(\d{1,3}\.){3}0\/24$/, 'Use the campus LAN as a /24 network, for example 192.168.15.0/24'),
-  public_key: z.string().trim().max(64),
-})
+const LAN_RE = /^(\d{1,3}\.){3}0\/24$/
+const IPV4_RE = /^(\d{1,3}\.){3}\d{1,3}$/
+
+const port = (label: string) =>
+  z.number({ error: `${label} must be a number` }).int().min(1, `${label} must be between 1 and 65535`).max(65535, `${label} must be between 1 and 65535`)
+
+export const peerSchema = z
+  .object({
+    campus_id: z.string().min(1, 'Choose a campus'),
+    name: z.string().trim().min(1, 'Name is required').max(128),
+    mode: z.enum(['windows', 'connector', 'router']),
+    lan_cidr: z.string().trim(),
+    public_key: z.string().trim().max(64),
+    nvr_host: z.string().trim(),
+    nvr_http_port: port('HTTP port'),
+    nvr_rtsp_port: port('RTSP port'),
+  })
+  .superRefine((v, ctx) => {
+    const lanMessage = 'Use the campus LAN as a /24 network, for example 192.168.15.0/24'
+    if (v.mode === 'windows') {
+      if (!IPV4_RE.test(v.nvr_host)) ctx.addIssue({ code: 'custom', path: ['nvr_host'], message: "Enter the NVR's real LAN address, for example 192.168.15.6" })
+      if (v.lan_cidr && !LAN_RE.test(v.lan_cidr)) ctx.addIssue({ code: 'custom', path: ['lan_cidr'], message: lanMessage })
+    } else if (!LAN_RE.test(v.lan_cidr)) {
+      ctx.addIssue({ code: 'custom', path: ['lan_cidr'], message: lanMessage })
+    }
+  })
 type PeerForm = z.infer<typeof peerSchema>
 
 function download(filename: string, text: string) {
@@ -62,18 +81,26 @@ function PeerDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenCh
     formState: { errors },
   } = useForm<PeerForm>({
     resolver: zodResolver(peerSchema),
-    defaultValues: { campus_id: '', name: '', mode: 'connector', lan_cidr: '', public_key: '' },
+    defaultValues: { campus_id: '', name: '', mode: 'windows', lan_cidr: '', public_key: '', nvr_host: '', nvr_http_port: 80, nvr_rtsp_port: 554 },
   })
   const mode = watch('mode')
 
   const submit = handleSubmit(async (v) => {
     try {
-      const created = await create.mutateAsync({ ...v, public_key: v.public_key || undefined })
+      const created = await create.mutateAsync({
+        campus_id: v.campus_id,
+        name: v.name,
+        mode: v.mode,
+        lan_cidr: v.lan_cidr || undefined,
+        public_key: v.public_key || undefined,
+        ...(v.mode === 'windows' ? { nvr_host: v.nvr_host, nvr_http_port: v.nvr_http_port, nvr_rtsp_port: v.nvr_rtsp_port } : {}),
+      })
       reset()
       onOpenChange(false)
       onCreated(created)
     } catch (err) {
       if (err instanceof ApiError && ['invalid_lan', 'lan_overlap'].includes(err.code)) setError('lan_cidr', { message: err.message })
+      else if (err instanceof ApiError && err.code === 'invalid_nvr_host') setError('nvr_host', { message: err.message })
       else if (err instanceof ApiError && ['invalid_public_key', 'duplicate_key'].includes(err.code)) setError('public_key', { message: err.message })
       else toast.error(errorMessage(err))
     }
@@ -127,15 +154,40 @@ function PeerDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenCh
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="connector">Connector device (Linux box, handles overlapping LAN ranges)</SelectItem>
+                    <SelectItem value="windows">Windows PC (WireGuard for Windows, forwards the NVR's ports)</SelectItem>
+                    <SelectItem value="connector">Linux connector (handles overlapping LAN ranges)</SelectItem>
                     <SelectItem value="router">Campus router with its own WireGuard client</SelectItem>
                   </SelectContent>
                 </Select>
               )}
             />
           </div>
+          {mode === 'windows' && (
+            <div className="space-y-3 rounded-md border p-3">
+              <div>
+                <Label htmlFor="peer-nvr">NVR's real LAN address</Label>
+                <Input id="peer-nvr" placeholder="192.168.15.6" aria-invalid={!!errors.nvr_host} {...register('nvr_host')} />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  The Windows PC forwards the NVR's ports from its tunnel address. You will register the NVR in the app at that tunnel address.
+                </p>
+                <FieldError message={errors.nvr_host?.message} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="peer-http">NVR HTTP port</Label>
+                  <Input id="peer-http" type="number" inputMode="numeric" {...register('nvr_http_port', { valueAsNumber: true })} />
+                  <FieldError message={errors.nvr_http_port?.message} />
+                </div>
+                <div>
+                  <Label htmlFor="peer-rtsp">NVR RTSP port</Label>
+                  <Input id="peer-rtsp" type="number" inputMode="numeric" {...register('nvr_rtsp_port', { valueAsNumber: true })} />
+                  <FieldError message={errors.nvr_rtsp_port?.message} />
+                </div>
+              </div>
+            </div>
+          )}
           <div>
-            <Label htmlFor="peer-lan">Campus LAN (as it really is)</Label>
+            <Label htmlFor="peer-lan">Campus LAN (as it really is){mode === 'windows' ? ' (optional)' : ''}</Label>
             <Input id="peer-lan" placeholder="192.168.15.0/24" aria-invalid={!!errors.lan_cidr} {...register('lan_cidr')} />
             <FieldError message={errors.lan_cidr?.message} />
           </div>
@@ -176,33 +228,55 @@ function CreatedDialog({ created, onClose }: { created: PeerCreated | null; onCl
             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden /> {w}
           </p>
         ))}
-        {created?.config ? (
+        {created && (
           <>
             <p role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-2 text-sm">
-              <strong>This configuration contains the campus private key and is shown only once.</strong> It is not stored on the server. Copy or download it now and
-              keep it private.
+              {created.config_kind === 'wg_quick' ? (
+                <>
+                  <strong>This configuration contains the campus private key and is shown only once.</strong> It is not stored on the server.
+                </>
+              ) : (
+                <>
+                  <strong>These settings include the pre-shared key and are shown only once.</strong> The router keeps its own private key, which this server never sees.
+                  Without this pre-shared key the tunnel cannot connect.
+                </>
+              )}{' '}
+              Copy or download it now and keep it private.
             </p>
+            <h3 className="text-sm font-medium">1. WireGuard {created.config_kind === 'wg_quick' ? 'configuration' : 'settings'}</h3>
             <pre className="max-h-72 overflow-auto rounded-md border bg-muted p-3 text-xs" aria-label="WireGuard configuration">
               {created.config}
             </pre>
+            {created.script && (
+              <>
+                <h3 className="text-sm font-medium">2. Forwarding script: run on the Windows PC in PowerShell as Administrator, after the tunnel is active</h3>
+                <pre className="max-h-64 overflow-auto rounded-md border bg-muted p-3 text-xs" aria-label="PowerShell forwarding script">
+                  {created.script}
+                </pre>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => void copy(created.script ?? '')}>
+                    <Copy /> Copy script
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => download(created.script_name ?? 'forward.ps1', created.script ?? '')}>
+                    <Download /> Download .ps1
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Then register the NVR in the app at the tunnel address <code>{created.peer.tunnel_ip}</code> (not its own address).
+                </p>
+              </>
+            )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => void copy(created.config ?? '')}>
+              <Button variant="outline" onClick={() => void copy(created.config)}>
                 <Copy /> Copy
               </Button>
-              <Button variant="outline" onClick={() => download(`${created.peer.name.replace(/\W+/g, '-')}.conf`, created.config ?? '')}>
-                <Download /> Download .conf
+              <Button
+                variant="outline"
+                onClick={() => download(`${created.peer.name.replace(/\W+/g, '-')}.${created.config_kind === 'wg_quick' ? 'conf' : 'txt'}`, created.config)}
+              >
+                <Download /> Download {created.config_kind === 'wg_quick' ? '.conf' : '.txt'}
               </Button>
               <Button onClick={onClose}>I have saved it</Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-            <p className="text-sm text-muted-foreground">
-              You supplied the campus public key, so there is no private key to show. Configure the campus device with the hub details from this page, tunnel address{' '}
-              <code>{created?.peer.tunnel_ip}</code>, and allow <code>{created?.peer.virtual_subnet}</code> through the tunnel.
-            </p>
-            <DialogFooter>
-              <Button onClick={onClose}>Done</Button>
             </DialogFooter>
           </>
         )}

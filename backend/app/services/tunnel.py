@@ -92,6 +92,8 @@ class NewPeer:
     peer: TunnelPeer
     private_key: str | None  # only set when the server generated the keypair; shown once, never stored
     warnings: list[str]
+    preshared_key: str  # shown once with the peer settings; the server keeps only an encrypted copy
+    nvr_host: str | None = None  # windows mode: the NVR's real LAN address, used only to build the forwarding script
 
 
 def active_peers(db: Session) -> list[TunnelPeer]:
@@ -108,21 +110,55 @@ def parse_lan(cidr: str) -> ipaddress.IPv4Network:
     return net
 
 
-def route_cidr(peer: TunnelPeer) -> str:
-    """What the hub routes to this peer: the virtual range for connectors, the real LAN for routers."""
+def route_cidr(peer: TunnelPeer) -> str | None:
+    """Extra range the hub routes to this peer besides its own tunnel address: the virtual range for connectors, the
+    real LAN for routers, nothing for Windows (the PC forwards ports from its tunnel address instead)."""
+    if peer.mode == PeerMode.WINDOWS:
+        return None
     return peer.lan_cidr if peer.mode == PeerMode.ROUTER else peer.virtual_subnet
 
 
 def nvr_address_pattern(peer: TunnelPeer) -> str:
+    if peer.mode == PeerMode.WINDOWS:
+        return f"the tunnel address {peer.tunnel_ip} (the Windows PC forwards the NVR's ports)"
     if peer.mode == PeerMode.ROUTER:
         return "the NVR's real LAN address (for example " + peer.lan_cidr.rsplit(".", 1)[0] + ".6)"
     return peer.virtual_subnet.rsplit(".", 1)[0] + ".<last number of the NVR's real LAN address>"
 
 
+def parse_nvr_host(value: str | None, lan: ipaddress.IPv4Network | None) -> ipaddress.IPv4Address:
+    if not value:
+        raise TunnelError("Enter the NVR's real LAN address for the Windows forwarding script", "invalid_nvr_host")
+    try:
+        ip = ipaddress.IPv4Address(value.strip())
+    except ValueError as exc:
+        raise TunnelError("The NVR address must be an IPv4 address like 192.168.15.6", "invalid_nvr_host") from exc
+    if not ip.is_private or ip.is_loopback or ip.is_link_local:
+        raise TunnelError("The NVR address must be a private LAN address", "invalid_nvr_host")
+    if lan is not None and ip not in lan:
+        raise TunnelError(f"The NVR address {ip} is not inside the campus LAN {lan}", "invalid_nvr_host")
+    return ip
+
+
 def create_peer(
-    db: Session, campus_id: object, name: str, mode: PeerMode, lan_cidr: str, public_key: str | None
+    db: Session,
+    campus_id: object,
+    name: str,
+    mode: PeerMode,
+    lan_cidr: str | None,
+    public_key: str | None,
+    nvr_host: str | None = None,
 ) -> NewPeer:
-    lan = parse_lan(lan_cidr)
+    host_ip: ipaddress.IPv4Address | None = None
+    if mode == PeerMode.WINDOWS:
+        # The LAN range is informational here: use the one given, or the /24 around the NVR's address.
+        lan_given = parse_lan(lan_cidr) if lan_cidr else None
+        host_ip = parse_nvr_host(nvr_host, lan_given)
+        lan = lan_given or ipaddress.ip_network(f"{host_ip}/24", strict=False)
+    else:
+        if not lan_cidr:
+            raise TunnelError("LAN range must be a network like 192.168.15.0/24", "invalid_lan")
+        lan = parse_lan(lan_cidr)
     used = {p.slot for p in active_peers(db)}
     slot = next((s for s in range(1, MAX_SLOT + 1) if s not in used), None)
     if slot is None:
@@ -143,15 +179,22 @@ def create_peer(
     if any(p.public_key == public for p in active_peers(db)):
         raise TunnelError("A peer with this public key already exists", "duplicate_key")
 
+    psk = generate_psk()
     peer = TunnelPeer(
         campus_id=campus_id,
         name=name,
         mode=mode,
         public_key=public,
-        preshared_key_encrypted=encrypt_secret(generate_psk()),
+        preshared_key_encrypted=encrypt_secret(psk),
         slot=slot,
         tunnel_ip=f"10.77.0.{slot + 1}",
-        virtual_subnet=f"10.77.{slot}.0/24" if mode == PeerMode.CONNECTOR else str(lan),
+        virtual_subnet=(
+            f"10.77.{slot}.0/24"
+            if mode == PeerMode.CONNECTOR
+            else f"10.77.0.{slot + 1}/32"
+            if mode == PeerMode.WINDOWS
+            else str(lan)
+        ),
         lan_cidr=str(lan),
     )
     db.add(peer)
@@ -162,7 +205,9 @@ def create_peer(
         warnings.append("WG_HUB_ENDPOINT is not set, so the generated config has a placeholder hub address")
     if not get_settings().wg_hub_private_key:
         warnings.append("WG_HUB_PRIVATE_KEY is not set (run scripts/init-env.py); the hub config cannot be generated")
-    return NewPeer(peer=peer, private_key=private, warnings=warnings)
+    return NewPeer(
+        peer=peer, private_key=private, warnings=warnings, preshared_key=psk, nvr_host=str(host_ip) if host_ip else None
+    )
 
 
 # ------------------------------------------------------------------------------------------------------ configs
@@ -178,13 +223,14 @@ def hub_config(db: Session) -> str:
         f"PrivateKey = {s.wg_hub_private_key}",
     ]
     for p in active_peers(db):
+        extra = route_cidr(p)
         lines += [
             "",
             f"# {p.name} ({p.mode.value}, slot {p.slot})",
             "[Peer]",
             f"PublicKey = {p.public_key}",
             f"PresharedKey = {decrypt_secret(p.preshared_key_encrypted)}",
-            f"AllowedIPs = {p.tunnel_ip}/32, {route_cidr(p)}",
+            f"AllowedIPs = {p.tunnel_ip}/32" + (f", {extra}" if extra else ""),
         ]
     return "\n".join(lines) + "\n"
 
@@ -219,6 +265,84 @@ def peer_config(peer: TunnelPeer, private_key: str) -> str:
         "PersistentKeepalive = 25",
     ]
     return "\n".join(iface + peer_section) + "\n"
+
+
+def peer_settings(peer: TunnelPeer, preshared_key: str) -> str:
+    """Settings sheet for a peer that made its own keypair (a router, or a connector that generated its own key).
+    Without the pre-shared key the hub would reject the handshake, so it must be shown once at creation."""
+    s = get_settings()
+    hub_pub = hub_public_key() or "HUB_PUBLIC_KEY_NOT_CONFIGURED"
+    endpoint = s.wg_hub_endpoint or f"REPLACE_WITH_HUB_HOST:{LISTEN_PORT}"
+    return "\n".join(
+        [
+            f'WireGuard settings for "{peer.name}". Enter these on the campus router or device.',
+            "",
+            "Interface (the campus side)",
+            "  Private key:           the one your router generated (we only hold its public key)",
+            f"  Address:               {peer.tunnel_ip}/32",
+            "",
+            "Peer (this server, the hub)",
+            f"  Public key:            {hub_pub}",
+            f"  Pre-shared key:        {preshared_key}",
+            f"  Endpoint:              {endpoint}",
+            f"  Allowed IPs:           {HUB_IP}/32",
+            "  Persistent keepalive:  25 seconds",
+            "",
+            *(
+                [
+                    "Forwarding",
+                    "  Run the PowerShell script (shown with these settings) as Administrator on the Windows PC.",
+                    "  It forwards the NVR's ports from the tunnel address to the NVR.",
+                ]
+                if peer.mode == PeerMode.WINDOWS
+                else [
+                    "Routing and firewall",
+                    f"  Route {HUB_IP}/32 through the tunnel. Do NOT send all traffic through it.",
+                    f"  Allow traffic from {HUB_IP} into the campus LAN {peer.lan_cidr}.",
+                ]
+            ),
+            "",
+        ]
+    )
+
+
+def windows_script(peer: TunnelPeer, nvr_host: str, ports: list[int]) -> str:
+    """PowerShell for the Windows connector: forwards the NVR's ports from the tunnel address (netsh portproxy) and
+    allows only the hub to use them. Inputs are an IPv4 address and integers that this module validated, so nothing
+    user-typed reaches the script unchecked. UNVERIFIED on real Windows hardware."""
+    port_list = ",".join(str(p) for p in ports)
+    return "\n".join(
+        [
+            f"# NVR Central: Windows connector for '{peer.name}'. Run in PowerShell as Administrator.",
+            "# Safe to run again. Do this AFTER the WireGuard tunnel is active (the tunnel address must exist).",
+            "$ErrorActionPreference = 'Stop'",
+            f"$tunnel = '{peer.tunnel_ip}'",
+            f"$nvr = '{nvr_host}'",
+            f"$hub = '{HUB_IP}'",
+            f"$ports = {port_list}",
+            "",
+            "Set-Service iphlpsvc -StartupType Automatic",
+            "Start-Service iphlpsvc",
+            "foreach ($p in $ports) {",
+            "  netsh interface portproxy delete v4tov4 listenaddress=$tunnel listenport=$p 2>$null | Out-Null",
+            "  netsh interface portproxy add v4tov4 listenaddress=$tunnel listenport=$p "
+            "connectaddress=$nvr connectport=$p",
+            "}",
+            "",
+            "Remove-NetFirewallRule -DisplayName 'NVR Central forward' -ErrorAction SilentlyContinue",
+            "New-NetFirewallRule -DisplayName 'NVR Central forward' -Direction Inbound -Protocol TCP "
+            "-LocalPort $ports -RemoteAddress $hub -Action Allow | Out-Null",
+            "",
+            "# The forwarder binds to the tunnel address, which only exists once WireGuard is up. Restart it shortly",
+            "# after every boot so it binds even when the tunnel service started later.",
+            "schtasks /Create /TN 'NVR Central restart IP Helper' /SC ONSTART /DELAY 0001:00 /RU SYSTEM "
+            "/TR 'powershell -NoProfile -Command Restart-Service iphlpsvc' /F | Out-Null",
+            "",
+            "netsh interface portproxy show v4tov4",
+            "Write-Host \"Done. Register the NVR in NVR Central at $tunnel with ports $($ports -join ', ').\"",
+            "",
+        ]
+    )
 
 
 def write_hub_conf(db: Session) -> bool:

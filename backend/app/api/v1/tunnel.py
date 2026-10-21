@@ -74,7 +74,7 @@ def create_peer(payload: PeerCreate, request: Request, user: AdminUser, db: DbSe
         )
     try:
         created = tunnel.create_peer(
-            db, campus.id, payload.name.strip(), payload.mode, payload.lan_cidr, payload.public_key
+            db, campus.id, payload.name.strip(), payload.mode, payload.lan_cidr, payload.public_key, payload.nvr_host
         )
     except tunnel.TunnelError as exc:
         db.rollback()
@@ -95,11 +95,22 @@ def create_peer(payload: PeerCreate, request: Request, user: AdminUser, db: DbSe
     )
     db.commit()
     tunnel.write_hub_conf(db)
-    config = tunnel.peer_config(created.peer, created.private_key) if created.private_key else None
+    if created.private_key:
+        config, kind = tunnel.peer_config(created.peer, created.private_key), "wg_quick"
+    else:
+        config, kind = tunnel.peer_settings(created.peer, created.preshared_key), "settings"
+    script = script_name = None
+    if created.nvr_host:
+        ports = sorted({payload.nvr_http_port, payload.nvr_rtsp_port})
+        script = tunnel.windows_script(created.peer, created.nvr_host, ports)
+        script_name = "nvr-central-forward.ps1"
     return PeerCreated(
         peer=_peer_out(db, created.peer),
         config=config,
-        private_key_shown_once=config is not None,
+        config_kind=kind,
+        script=script,
+        script_name=script_name,
+        private_key_shown_once=created.private_key is not None,
         warnings=created.warnings,
     )
 
