@@ -1,2 +1,5 @@
-# Pinned for the Phase 0 feasibility spike. Verified against source on 2026-10-21.
+# Phase 0 diagnostics.
+# P2P spike (diag/p2p_diag.py): verified against source on 2026-10-21.
 opendahua==1.0.8
+# LAN diagnostic (diag/lan_diag.py)
+httpx>=0.27,<1

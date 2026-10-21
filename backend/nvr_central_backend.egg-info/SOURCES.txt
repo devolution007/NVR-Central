@@ -1,0 +1,6 @@
+pyproject.toml
+nvr_central_backend.egg-info/PKG-INFO
+nvr_central_backend.egg-info/SOURCES.txt
+nvr_central_backend.egg-info/dependency_links.txt
+nvr_central_backend.egg-info/requires.txt
+nvr_central_backend.egg-info/top_level.txt
