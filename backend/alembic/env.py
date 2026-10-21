@@ -1,9 +1,9 @@
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import create_engine, pool
 
 import app.models  # noqa: F401  (registers all tables on Base.metadata)
+from alembic import context
 from app.core.config import get_settings
 from app.db.base import Base
 

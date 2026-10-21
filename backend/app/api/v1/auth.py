@@ -27,6 +27,7 @@ from app.models.user import RefreshSession, User
 from app.schemas.user import LoginIn, UserDetailOut
 from app.services import audit
 from app.services.ratelimit import login_limiter
+from app.services.users import user_detail
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -37,17 +38,29 @@ def _set_session_cookies(response: Response, user: User, refresh_token: str) -> 
     s = get_settings()
     common = {"secure": s.cookie_secure, "samesite": "lax"}
     response.set_cookie(
-        ACCESS_COOKIE, create_access_token(str(user.id), user.role.value),
-        max_age=s.access_token_minutes * 60, httponly=True, path="/", **common,  # type: ignore[arg-type]
+        ACCESS_COOKIE,
+        create_access_token(str(user.id), user.role.value),
+        max_age=s.access_token_minutes * 60,
+        httponly=True,
+        path="/",
+        **common,  # type: ignore[arg-type]
     )
     response.set_cookie(
-        REFRESH_COOKIE, refresh_token,
-        max_age=s.refresh_token_days * 86400, httponly=True, path=REFRESH_PATH, **common,  # type: ignore[arg-type]
+        REFRESH_COOKIE,
+        refresh_token,
+        max_age=s.refresh_token_days * 86400,
+        httponly=True,
+        path=REFRESH_PATH,
+        **common,  # type: ignore[arg-type]
     )
     # Readable by the SPA on purpose: it echoes this value in X-CSRF-Token (double-submit).
     response.set_cookie(
-        CSRF_COOKIE, new_csrf_token(),
-        max_age=s.refresh_token_days * 86400, httponly=False, path="/", **common,  # type: ignore[arg-type]
+        CSRF_COOKIE,
+        new_csrf_token(),
+        max_age=s.refresh_token_days * 86400,
+        httponly=False,
+        path="/",
+        **common,  # type: ignore[arg-type]
     )
 
 
@@ -71,13 +84,7 @@ def _new_refresh_session(db: DbSession, request: Request, user: User) -> str:
     return token
 
 
-def _user_out(db: DbSession, user: User) -> UserDetailOut:
-    from app.models.user import UserCampusPermission
-
-    ids = list(db.scalars(select(UserCampusPermission.campus_id).where(UserCampusPermission.user_id == user.id)))
-    out = UserDetailOut.model_validate(user)
-    out.campus_ids = ids
-    return out
+_user_out = user_detail
 
 
 @router.post("/login", response_model=UserDetailOut)
@@ -93,14 +100,18 @@ def login(payload: LoginIn, request: Request, response: Response, db: DbSession)
 
     if user is None:
         verify_password(payload.password, DUMMY_HASH)
-        audit.record(db, request, "auth.login", actor_username=username, success=False, details={"reason": "unknown_user"})
+        audit.record(
+            db, request, "auth.login", actor_username=username, success=False, details={"reason": "unknown_user"}
+        )
         db.commit()
         raise ApiError(401, "invalid_credentials", "Invalid username or password")
 
     if user.locked_until and user.locked_until > now:
         audit.record(db, request, "auth.login", actor=user, success=False, details={"reason": "locked"})
         db.commit()
-        raise ApiError(429, "account_locked", "Account temporarily locked after repeated failed logins. Try again later.")
+        raise ApiError(
+            429, "account_locked", "Account temporarily locked after repeated failed logins. Try again later."
+        )
 
     if not verify_password(payload.password, user.password_hash):
         user.failed_login_count += 1

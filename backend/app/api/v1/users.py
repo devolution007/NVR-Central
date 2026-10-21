@@ -15,15 +15,12 @@ from app.models.user import RefreshSession, User, UserCampusPermission
 from app.schemas.common import Page
 from app.schemas.user import UserCampusesIn, UserCreate, UserDetailOut, UserUpdate
 from app.services import audit
+from app.services.users import user_detail
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-def _detail(db: Session, user: User) -> UserDetailOut:
-    ids = list(db.scalars(select(UserCampusPermission.campus_id).where(UserCampusPermission.user_id == user.id)))
-    out = UserDetailOut.model_validate(user)
-    out.campus_ids = ids
-    return out
+_detail = user_detail
 
 
 def _get(db: Session, user_id: uuid.UUID) -> User:
@@ -46,13 +43,23 @@ def _check_campuses_exist(db: Session, ids: list[uuid.UUID]) -> None:
     found = set(db.scalars(select(Campus.id).where(Campus.id.in_(ids), Campus.deleted_at.is_(None))))
     missing = set(ids) - found
     if missing:
-        raise ApiError(422, "validation_error", "Unknown campus id(s)", [{"field": "campus_ids", "message": str(sorted(map(str, missing)))}])
+        raise ApiError(
+            422,
+            "validation_error",
+            "Unknown campus id(s)",
+            [{"field": "campus_ids", "message": str(sorted(map(str, missing)))}],
+        )
 
 
 def _active_admin_count(db: Session) -> int:
-    return db.scalar(
-        select(func.count()).select_from(User).where(User.role == Role.ADMIN, User.is_active.is_(True), User.deleted_at.is_(None))
-    ) or 0
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(User)
+            .where(User.role == Role.ADMIN, User.is_active.is_(True), User.deleted_at.is_(None))
+        )
+        or 0
+    )
 
 
 @router.get("", response_model=Page[UserDetailOut])
@@ -73,8 +80,12 @@ def create_user(payload: UserCreate, request: Request, actor: AdminUser, db: DbS
     _check_password(payload.password, payload.username)
     _check_campuses_exist(db, payload.campus_ids)
     user = User(
-        username=payload.username, display_name=payload.display_name, email=payload.email,
-        password_hash=hash_password(payload.password), role=payload.role, is_active=True,
+        username=payload.username,
+        display_name=payload.display_name,
+        email=payload.email,
+        password_hash=hash_password(payload.password),
+        role=payload.role,
+        is_active=True,
     )
     db.add(user)
     try:
@@ -84,8 +95,15 @@ def create_user(payload: UserCreate, request: Request, actor: AdminUser, db: DbS
         raise conflict("Username already taken", "username_taken") from exc
     for cid in set(payload.campus_ids):
         db.add(UserCampusPermission(user_id=user.id, campus_id=cid))
-    audit.record(db, request, "user.create", actor=actor, entity_type="user", entity_id=user.id,
-                 details={"username": user.username, "role": user.role.value})
+    audit.record(
+        db,
+        request,
+        "user.create",
+        actor=actor,
+        entity_type="user",
+        entity_id=user.id,
+        details={"username": user.username, "role": user.role.value},
+    )
     db.commit()
     return _detail(db, user)
 
@@ -96,7 +114,9 @@ def get_user(user_id: uuid.UUID, _: AdminUser, db: DbSession) -> UserDetailOut:
 
 
 @router.patch("/{user_id}", response_model=UserDetailOut)
-def update_user(user_id: uuid.UUID, payload: UserUpdate, request: Request, actor: AdminUser, db: DbSession) -> UserDetailOut:
+def update_user(
+    user_id: uuid.UUID, payload: UserUpdate, request: Request, actor: AdminUser, db: DbSession
+) -> UserDetailOut:
     user = _get(db, user_id)
     changes: dict[str, object] = {}
 
@@ -123,7 +143,8 @@ def update_user(user_id: uuid.UUID, payload: UserUpdate, request: Request, actor
         changes["password_changed"] = True
     if changes.get("password_changed") or changes.get("is_active") is False:
         db.execute(
-            update(RefreshSession).where(RefreshSession.user_id == user.id, RefreshSession.revoked_at.is_(None))
+            update(RefreshSession)
+            .where(RefreshSession.user_id == user.id, RefreshSession.revoked_at.is_(None))
             .values(revoked_at=utcnow())
         )
     user.updated_at = utcnow()
@@ -133,13 +154,22 @@ def update_user(user_id: uuid.UUID, payload: UserUpdate, request: Request, actor
 
 
 @router.put("/{user_id}/campuses", response_model=UserDetailOut)
-def set_user_campuses(user_id: uuid.UUID, payload: UserCampusesIn, request: Request, actor: AdminUser, db: DbSession) -> UserDetailOut:
+def set_user_campuses(
+    user_id: uuid.UUID, payload: UserCampusesIn, request: Request, actor: AdminUser, db: DbSession
+) -> UserDetailOut:
     user = _get(db, user_id)
     _check_campuses_exist(db, payload.campus_ids)
     db.execute(delete(UserCampusPermission).where(UserCampusPermission.user_id == user.id))
     for cid in set(payload.campus_ids):
         db.add(UserCampusPermission(user_id=user.id, campus_id=cid))
-    audit.record(db, request, "user.campuses", actor=actor, entity_type="user", entity_id=user.id,
-                 details={"campus_count": len(set(payload.campus_ids))})
+    audit.record(
+        db,
+        request,
+        "user.campuses",
+        actor=actor,
+        entity_type="user",
+        entity_id=user.id,
+        details={"campus_count": len(set(payload.campus_ids))},
+    )
     db.commit()
     return _detail(db, user)

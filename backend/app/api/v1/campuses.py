@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Query, Request
-from sqlalchemy import Select, func, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -20,7 +20,10 @@ router = APIRouter(prefix="/campuses", tags=["campuses"])
 
 
 def _stats(db: Session, campus_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
-    stats = {cid: {"nvr_count": 0, "connected_nvr_count": 0, "camera_count": 0, "backup_enabled_camera_count": 0} for cid in campus_ids}
+    stats = {
+        cid: {"nvr_count": 0, "connected_nvr_count": 0, "camera_count": 0, "backup_enabled_camera_count": 0}
+        for cid in campus_ids
+    }
     if not campus_ids:
         return stats
     for cid, total, connected in db.execute(
@@ -72,7 +75,7 @@ def list_campuses(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
 ) -> Page[CampusOut]:
-    stmt: Select[tuple[Campus]] = select(Campus).where(Campus.deleted_at.is_(None))
+    stmt = select(Campus).where(Campus.deleted_at.is_(None))
     allowed = allowed_campus_ids(db, user)
     if allowed is not None:
         stmt = stmt.where(Campus.id.in_(allowed))
@@ -93,8 +96,16 @@ def create_campus(payload: CampusCreate, request: Request, user: AdminUser, db: 
     except IntegrityError as exc:
         db.rollback()
         raise conflict("A campus with this name already exists", "campus_name_taken") from exc
-    audit.record(db, request, "campus.create", actor=user, entity_type="campus", entity_id=campus.id, campus_id=campus.id,
-                 details={"name": campus.name})
+    audit.record(
+        db,
+        request,
+        "campus.create",
+        actor=user,
+        entity_type="campus",
+        entity_id=campus.id,
+        campus_id=campus.id,
+        details={"name": campus.name},
+    )
     db.commit()
     return _out(campus, _stats(db, [campus.id])[campus.id])
 
@@ -107,7 +118,9 @@ def get_campus(campus_id: uuid.UUID, user: CurrentUser, db: DbSession) -> Campus
 
 
 @router.put("/{campus_id}", response_model=CampusOut)
-def update_campus(campus_id: uuid.UUID, payload: CampusUpdate, request: Request, user: AdminUser, db: DbSession) -> CampusOut:
+def update_campus(
+    campus_id: uuid.UUID, payload: CampusUpdate, request: Request, user: AdminUser, db: DbSession
+) -> CampusOut:
     campus = _get_active(db, campus_id)
     campus.name, campus.description, campus.location = payload.name, payload.description, payload.location
     campus.updated_at = utcnow()
@@ -116,8 +129,16 @@ def update_campus(campus_id: uuid.UUID, payload: CampusUpdate, request: Request,
     except IntegrityError as exc:
         db.rollback()
         raise conflict("A campus with this name already exists", "campus_name_taken") from exc
-    audit.record(db, request, "campus.update", actor=user, entity_type="campus", entity_id=campus.id, campus_id=campus.id,
-                 details={"name": campus.name})
+    audit.record(
+        db,
+        request,
+        "campus.update",
+        actor=user,
+        entity_type="campus",
+        entity_id=campus.id,
+        campus_id=campus.id,
+        details={"name": campus.name},
+    )
     db.commit()
     return _out(campus, _stats(db, [campus.id])[campus.id])
 
@@ -125,10 +146,21 @@ def update_campus(campus_id: uuid.UUID, payload: CampusUpdate, request: Request,
 @router.delete("/{campus_id}", status_code=204)
 def delete_campus(campus_id: uuid.UUID, request: Request, user: AdminUser, db: DbSession) -> None:
     campus = _get_active(db, campus_id)
-    nvrs = db.scalar(select(func.count()).select_from(Nvr).where(Nvr.campus_id == campus.id, Nvr.deleted_at.is_(None))) or 0
+    nvrs = (
+        db.scalar(select(func.count()).select_from(Nvr).where(Nvr.campus_id == campus.id, Nvr.deleted_at.is_(None)))
+        or 0
+    )
     if nvrs:
         raise ApiError(409, "campus_has_nvrs", f"Remove or move the {nvrs} NVR(s) in this campus first")
     campus.deleted_at = utcnow()
-    audit.record(db, request, "campus.delete", actor=user, entity_type="campus", entity_id=campus.id, campus_id=campus.id,
-                 details={"name": campus.name})
+    audit.record(
+        db,
+        request,
+        "campus.delete",
+        actor=user,
+        entity_type="campus",
+        entity_id=campus.id,
+        campus_id=campus.id,
+        details={"name": campus.name},
+    )
     db.commit()

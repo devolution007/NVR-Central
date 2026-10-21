@@ -1,4 +1,5 @@
 """Standard error envelope: {"error": {"code": "...", "message": "...", "details": ...}}."""
+
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -31,8 +32,7 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
         details = [
-            {"field": ".".join(str(p) for p in e["loc"] if p != "body"), "message": e["msg"]}
-            for e in exc.errors()
+            {"field": ".".join(str(p) for p in e["loc"] if p != "body"), "message": e["msg"]} for e in exc.errors()
         ]
         return JSONResponse(_body("validation_error", "Request validation failed", details), status_code=422)
 

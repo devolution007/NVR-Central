@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import AdminUser, CurrentUser, DbSession, allowed_campus_ids, assert_campus_access
 from app.core.errors import ApiError, conflict, not_found
-from app.core.security import encrypt_secret, decrypt_secret, mask_secret
+from app.core.security import decrypt_secret, encrypt_secret, mask_secret
 from app.db.base import utcnow
 from app.models.camera import Camera
 from app.models.campus import Campus
@@ -22,16 +22,35 @@ router = APIRouter(prefix="/nvrs", tags=["nvrs"])
 
 def _out(db: Session, nvr: Nvr) -> NvrOut:
     campus = db.get(Campus, nvr.campus_id)
-    cams = db.scalar(
-        select(func.count()).select_from(Camera).where(Camera.nvr_id == nvr.id, Camera.status != CameraStatus.UNAVAILABLE)
-    ) or 0
+    cams = (
+        db.scalar(
+            select(func.count())
+            .select_from(Camera)
+            .where(Camera.nvr_id == nvr.id, Camera.status != CameraStatus.UNAVAILABLE)
+        )
+        or 0
+    )
     masked = mask_secret(decrypt_secret(nvr.p2p_serial_encrypted)) if nvr.p2p_serial_encrypted else None
     return NvrOut(
-        id=nvr.id, campus_id=nvr.campus_id, campus_name=campus.name if campus else "", name=nvr.name,
-        connection_type=nvr.connection_type, host=nvr.host, http_port=nvr.http_port, rtsp_port=nvr.rtsp_port,
-        username=nvr.username, has_password=bool(nvr.password_encrypted), p2p_serial_masked=masked,
-        status=nvr.status, status_message=nvr.status_message, model=nvr.model, firmware=nvr.firmware,
-        enabled=nvr.enabled, camera_count=cams, created_at=nvr.created_at, updated_at=nvr.updated_at,
+        id=nvr.id,
+        campus_id=nvr.campus_id,
+        campus_name=campus.name if campus else "",
+        name=nvr.name,
+        connection_type=nvr.connection_type,
+        host=nvr.host,
+        http_port=nvr.http_port,
+        rtsp_port=nvr.rtsp_port,
+        username=nvr.username,
+        has_password=bool(nvr.password_encrypted),
+        p2p_serial_masked=masked,
+        status=nvr.status,
+        status_message=nvr.status_message,
+        model=nvr.model,
+        firmware=nvr.firmware,
+        enabled=nvr.enabled,
+        camera_count=cams,
+        created_at=nvr.created_at,
+        updated_at=nvr.updated_at,
     )
 
 
@@ -49,7 +68,9 @@ def _get_visible(db: Session, user: CurrentUser, nvr_id: uuid.UUID) -> Nvr:
 def _require_campus(db: Session, campus_id: uuid.UUID) -> Campus:
     campus = db.get(Campus, campus_id)
     if campus is None or campus.deleted_at is not None:
-        raise ApiError(422, "validation_error", "Campus does not exist", [{"field": "campus_id", "message": "Unknown campus"}])
+        raise ApiError(
+            422, "validation_error", "Campus does not exist", [{"field": "campus_id", "message": "Unknown campus"}]
+        )
     return campus
 
 
@@ -82,11 +103,18 @@ def list_nvrs(
 def create_nvr(payload: NvrCreate, request: Request, user: AdminUser, db: DbSession) -> NvrOut:
     _require_campus(db, payload.campus_id)
     nvr = Nvr(
-        campus_id=payload.campus_id, name=payload.name, connection_type=payload.connection_type,
-        host=payload.host, http_port=payload.http_port, rtsp_port=payload.rtsp_port, username=payload.username,
+        campus_id=payload.campus_id,
+        name=payload.name,
+        connection_type=payload.connection_type,
+        host=payload.host,
+        http_port=payload.http_port,
+        rtsp_port=payload.rtsp_port,
+        username=payload.username,
         password_encrypted=encrypt_secret(payload.password),
         p2p_serial_encrypted=encrypt_secret(payload.p2p_serial) if payload.p2p_serial else None,
-        enabled=payload.enabled, status=NvrStatus.PENDING, status_changed_at=utcnow(),
+        enabled=payload.enabled,
+        status=NvrStatus.PENDING,
+        status_changed_at=utcnow(),
     )
     db.add(nvr)
     try:
@@ -94,8 +122,16 @@ def create_nvr(payload: NvrCreate, request: Request, user: AdminUser, db: DbSess
     except IntegrityError as exc:
         db.rollback()
         raise conflict("An NVR with this name already exists in the campus", "nvr_name_taken") from exc
-    audit.record(db, request, "nvr.create", actor=user, entity_type="nvr", entity_id=nvr.id, campus_id=nvr.campus_id,
-                 details={"name": nvr.name, "connection_type": nvr.connection_type.value})
+    audit.record(
+        db,
+        request,
+        "nvr.create",
+        actor=user,
+        entity_type="nvr",
+        entity_id=nvr.id,
+        campus_id=nvr.campus_id,
+        details={"name": nvr.name, "connection_type": nvr.connection_type.value},
+    )
     db.commit()
     return _out(db, nvr)
 
@@ -111,15 +147,26 @@ def update_nvr(nvr_id: uuid.UUID, payload: NvrUpdate, request: Request, user: Ad
     _require_campus(db, payload.campus_id)
 
     if payload.connection_type in (ConnectionType.TUNNEL, ConnectionType.LAN) and not payload.host:
-        raise ApiError(422, "validation_error", "host is required for tunnel and lan connections",
-                       [{"field": "host", "message": "Required"}])
+        raise ApiError(
+            422,
+            "validation_error",
+            "host is required for tunnel and lan connections",
+            [{"field": "host", "message": "Required"}],
+        )
     if payload.connection_type == ConnectionType.P2P and not (payload.p2p_serial or nvr.p2p_serial_encrypted):
-        raise ApiError(422, "validation_error", "p2p_serial is required for p2p connections",
-                       [{"field": "p2p_serial", "message": "Required"}])
+        raise ApiError(
+            422,
+            "validation_error",
+            "p2p_serial is required for p2p connections",
+            [{"field": "p2p_serial", "message": "Required"}],
+        )
 
-    connection_changed = (payload.connection_type, payload.host, payload.http_port, payload.rtsp_port, payload.username) != (
-        nvr.connection_type, nvr.host, nvr.http_port, nvr.rtsp_port, nvr.username
-    ) or payload.password is not None or payload.p2p_serial is not None
+    connection_changed = (
+        (payload.connection_type, payload.host, payload.http_port, payload.rtsp_port, payload.username)
+        != (nvr.connection_type, nvr.host, nvr.http_port, nvr.rtsp_port, nvr.username)
+        or payload.password is not None
+        or payload.p2p_serial is not None
+    )
 
     nvr.campus_id, nvr.name, nvr.connection_type = payload.campus_id, payload.name, payload.connection_type
     nvr.host, nvr.http_port, nvr.rtsp_port = payload.host, payload.http_port, payload.rtsp_port
@@ -137,8 +184,19 @@ def update_nvr(nvr_id: uuid.UUID, payload: NvrUpdate, request: Request, user: Ad
     except IntegrityError as exc:
         db.rollback()
         raise conflict("An NVR with this name already exists in the campus", "nvr_name_taken") from exc
-    audit.record(db, request, "nvr.update", actor=user, entity_type="nvr", entity_id=nvr.id, campus_id=nvr.campus_id,
-                 details={"name": nvr.name, "credentials_changed": payload.password is not None or payload.p2p_serial is not None})
+    audit.record(
+        db,
+        request,
+        "nvr.update",
+        actor=user,
+        entity_type="nvr",
+        entity_id=nvr.id,
+        campus_id=nvr.campus_id,
+        details={
+            "name": nvr.name,
+            "credentials_changed": payload.password is not None or payload.p2p_serial is not None,
+        },
+    )
     db.commit()
     return _out(db, nvr)
 
@@ -148,6 +206,14 @@ def delete_nvr(nvr_id: uuid.UUID, request: Request, user: AdminUser, db: DbSessi
     nvr = _get_visible(db, user, nvr_id)
     # Soft delete: cameras and backup history stay so past recordings remain traceable.
     nvr.deleted_at = utcnow()
-    audit.record(db, request, "nvr.delete", actor=user, entity_type="nvr", entity_id=nvr.id, campus_id=nvr.campus_id,
-                 details={"name": nvr.name})
+    audit.record(
+        db,
+        request,
+        "nvr.delete",
+        actor=user,
+        entity_type="nvr",
+        entity_id=nvr.id,
+        campus_id=nvr.campus_id,
+        details={"name": nvr.name},
+    )
     db.commit()

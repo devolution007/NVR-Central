@@ -5,6 +5,7 @@
 The first administrator is created here, never through a default account. The password is
 read from a hidden prompt, or from the NVR_ADMIN_PASSWORD environment variable for scripted setup.
 """
+
 import argparse
 import getpass
 import os
@@ -31,12 +32,23 @@ def create_admin(username: str, display_name: str) -> int:
         return 1
 
     with get_sessionmaker()() as db:
-        exists = db.scalar(select(func.count()).select_from(User).where(func.lower(User.username) == username, User.deleted_at.is_(None)))
+        exists = db.scalar(
+            select(func.count())
+            .select_from(User)
+            .where(func.lower(User.username) == username, User.deleted_at.is_(None))
+        )
         if exists:
             print(f"User '{username}' already exists.", file=sys.stderr)
             return 1
-        db.add(User(username=username, display_name=display_name or username, password_hash=hash_password(password),
-                    role=Role.ADMIN, is_active=True))
+        db.add(
+            User(
+                username=username,
+                display_name=display_name or username,
+                password_hash=hash_password(password),
+                role=Role.ADMIN,
+                is_active=True,
+            )
+        )
         db.commit()
     print(f"Administrator '{username}' created.")
     return 0

@@ -36,9 +36,7 @@ class CameraBackupPolicy(Base, IdMixin, TimestampMixin):
 
     __tablename__ = "camera_backup_policies"
 
-    camera_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("cameras.id"), unique=True
-    )
+    camera_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("cameras.id"), unique=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Substream by default: roughly 232 MB/hour versus 908 MB/hour for main on the test NVR.
     backup_stream: Mapped[BackupStream] = mapped_column(_enum(BackupStream), default=BackupStream.SUB)

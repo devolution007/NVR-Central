@@ -27,8 +27,10 @@ def dashboard_summary(user: CurrentUser, db: DbSession) -> dict[str, object]:
     nvrs = select(Nvr.status, func.count()).where(Nvr.deleted_at.is_(None)).group_by(Nvr.status)
     cameras = select(func.count()).select_from(Camera).where(Camera.status != CameraStatus.UNAVAILABLE)
     backups = (
-        select(func.count()).select_from(CameraBackupPolicy)
-        .join(Camera, Camera.id == CameraBackupPolicy.camera_id).where(CameraBackupPolicy.enabled.is_(True))
+        select(func.count())
+        .select_from(CameraBackupPolicy)
+        .join(Camera, Camera.id == CameraBackupPolicy.camera_id)
+        .where(CameraBackupPolicy.enabled.is_(True))
     )
     if allowed is not None:
         campuses = campuses.where(Campus.id.in_(allowed))
