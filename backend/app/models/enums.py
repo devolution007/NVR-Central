@@ -50,3 +50,32 @@ class RecordingMode(StrEnum):
     CONTINUOUS = "continuous"
     MOTION = "motion"
     EVENT = "event"
+
+
+class StreamKind(StrEnum):
+    MAIN = "main"
+    SUB = "sub"
+
+
+class CapabilityName(StrEnum):
+    P2P_AUTH = "p2p_auth"
+    DEVICE_INFO = "device_info"
+    CHANNEL_DISCOVERY = "channel_discovery"
+    LIVE_VIDEO = "live_video"
+    RECORDING_SEARCH = "recording_search"
+    RECORDING_DOWNLOAD = "recording_download"
+    SNAPSHOT = "snapshot"
+
+
+class CapabilityStatus(StrEnum):
+    """Never mark something supported because a connection worked. SUPPORTED_TESTED means this exact operation
+    was observed working against this NVR; UNKNOWN means we have not tried it."""
+
+    SUPPORTED_TESTED = "supported_tested"
+    UNSUPPORTED = "unsupported"
+    UNKNOWN = "unknown"
+
+
+class PeerMode(StrEnum):
+    CONNECTOR = "connector"  # small always-on box running our WireGuard + NAT setup
+    ROUTER = "router"  # the campus router holds the tunnel (its own WireGuard client)

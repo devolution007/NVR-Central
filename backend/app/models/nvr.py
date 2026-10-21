@@ -1,13 +1,13 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, IdMixin, SoftDeleteMixin, TimestampMixin
-from app.models.enums import ConnectionType, NvrStatus
+from app.models.enums import CapabilityName, CapabilityStatus, ConnectionType, NvrStatus
 
 
 def _enum(e: type) -> SAEnum:
@@ -38,6 +38,10 @@ class Nvr(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     firmware: Mapped[str | None] = mapped_column(String(64), default=None)
     # Dahua NTP.TimeZone enum value, needed to convert NVR local timestamps to UTC (Phase 2/4).
     timezone_code: Mapped[int | None] = mapped_column(Integer, default=None)
+    # NVR local time minus UTC, measured from the NVR clock at the last successful check (15-minute steps).
+    utc_offset_minutes: Mapped[int | None] = mapped_column(Integer, default=None)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     __table_args__ = (
@@ -49,3 +53,15 @@ class Nvr(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
             postgresql_where=text("deleted_at IS NULL"),
         ),
     )
+
+
+class NvrCapability(Base, IdMixin):
+    __tablename__ = "nvr_capabilities"
+
+    nvr_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("nvrs.id", ondelete="CASCADE"), index=True)
+    name: Mapped[CapabilityName] = mapped_column(_enum(CapabilityName))
+    status: Mapped[CapabilityStatus] = mapped_column(_enum(CapabilityStatus), default=CapabilityStatus.UNKNOWN)
+    detail: Mapped[str] = mapped_column(String(512), default="")
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+    __table_args__ = (UniqueConstraint("nvr_id", "name", name="uq_nvr_capabilities_nvr_name"),)

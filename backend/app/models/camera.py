@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, IdMixin, TimestampMixin
-from app.models.enums import BackupStream, CameraStatus, RecordingMode
+from app.models.enums import BackupStream, CameraStatus, RecordingMode, StreamKind
 
 
 def _enum(e: type) -> SAEnum:
@@ -27,8 +27,28 @@ class Camera(Base, IdMixin, TimestampMixin):
     status: Mapped[CameraStatus] = mapped_column(_enum(CameraStatus), default=CameraStatus.UNKNOWN)
     model: Mapped[str | None] = mapped_column(String(64), default=None)
     last_discovered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    status_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    status_detail: Mapped[str | None] = mapped_column(String(256), default=None)
 
     __table_args__ = (UniqueConstraint("nvr_id", "channel_number", name="uq_cameras_nvr_channel"),)
+
+
+class CameraStreamProfile(Base, IdMixin):
+    """Encode settings the NVR reports for a camera's main and sub streams."""
+
+    __tablename__ = "camera_stream_profiles"
+
+    camera_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("cameras.id", ondelete="CASCADE"), index=True
+    )
+    stream: Mapped[StreamKind] = mapped_column(_enum(StreamKind))
+    codec: Mapped[str | None] = mapped_column(String(16), default=None)
+    width: Mapped[int | None] = mapped_column(Integer, default=None)
+    height: Mapped[int | None] = mapped_column(Integer, default=None)
+    bitrate_kbps: Mapped[int | None] = mapped_column(Integer, default=None)
+    fps: Mapped[int | None] = mapped_column(Integer, default=None)
+
+    __table_args__ = (UniqueConstraint("camera_id", "stream", name="uq_camera_stream_profiles_camera_stream"),)
 
 
 class CameraBackupPolicy(Base, IdMixin, TimestampMixin):

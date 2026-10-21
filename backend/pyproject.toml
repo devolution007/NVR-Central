@@ -14,12 +14,14 @@ dependencies = [
     "argon2-cffi>=23.1",
     "pyjwt>=2.9",
     "cryptography>=43",
+    "httpx>=0.27",
+    "celery[redis]>=5.4",
+    "redis>=5.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
-    "httpx>=0.27",
     "ruff>=0.6",
     "mypy>=1.11",
 ]
@@ -47,4 +49,8 @@ exclude = ["alembic/"]
 
 [[tool.mypy.overrides]]
 module = ["argon2.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["celery.*", "kombu.*"]
 ignore_missing_imports = true
