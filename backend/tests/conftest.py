@@ -39,6 +39,14 @@ os.environ["COOKIE_SECURE"] = "false"
 os.environ["ENVIRONMENT"] = "development"
 os.environ["LOGIN_MAX_FAILURES"] = "5"
 os.environ["LOGIN_IP_LIMIT_PER_MINUTE"] = "20"
+os.environ["CELERY_TASK_ALWAYS_EAGER"] = "true"  # run tasks inline; tests never need a worker process
+os.environ["ALLOW_LOOPBACK_NVR_HOSTS"] = "true"  # the simulated NVR listens on 127.0.0.1
+os.environ["WG_HUB_ENDPOINT"] = "vpn.test.example:51820"
+os.environ["WG_HUB_CONF_PATH"] = ""
+# A throwaway hub key, so tests never depend on or expose the developer's real one.
+import base64 as _b64  # noqa: E402
+
+os.environ["WG_HUB_PRIVATE_KEY"] = _b64.b64encode(os.urandom(32)).decode()
 
 from fastapi.testclient import TestClient  # noqa: E402
 

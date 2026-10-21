@@ -43,6 +43,8 @@ class NvrBase(BaseModel):
 class NvrCreate(NvrBase):
     password: str = Field(min_length=1, max_length=128)
     p2p_serial: str | None = Field(default=None, min_length=4, max_length=64)
+    # Queue a connection test and camera discovery right after saving.
+    auto_connect: bool = True
 
     @model_validator(mode="after")
     def _profile_complete(self) -> "NvrCreate":
@@ -77,5 +79,8 @@ class NvrOut(BaseModel):
     firmware: str | None
     enabled: bool
     camera_count: int = 0
+    utc_offset_minutes: int | None = None
+    last_checked_at: datetime | None = None
+    last_success_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

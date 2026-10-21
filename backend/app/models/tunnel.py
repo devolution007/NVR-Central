@@ -28,7 +28,9 @@ class TunnelPeer(Base, IdMixin, TimestampMixin):
     preshared_key_encrypted: Mapped[str] = mapped_column(Text)
     slot: Mapped[int] = mapped_column(Integer)  # 1..253, derives tunnel_ip and virtual_subnet
     tunnel_ip: Mapped[str] = mapped_column(String(15))  # 10.77.0.<slot+1>
-    virtual_subnet: Mapped[str] = mapped_column(String(18))  # 10.77.<slot>.0/24: how the server addresses the campus LAN
+    virtual_subnet: Mapped[str] = mapped_column(
+        String(18)
+    )  # 10.77.<slot>.0/24: how the server addresses the campus LAN
     lan_cidr: Mapped[str] = mapped_column(String(18))  # the campus LAN as it really is, e.g. 192.168.15.0/24
 
     last_handshake_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)

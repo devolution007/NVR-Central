@@ -6,16 +6,20 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import AdminUser, CurrentUser, DbSession, allowed_campus_ids, assert_campus_access
+from app.api.v1.cameras import cameras_out
 from app.core.errors import ApiError, conflict, not_found
 from app.core.security import decrypt_secret, encrypt_secret, mask_secret
 from app.db.base import utcnow
 from app.models.camera import Camera
 from app.models.campus import Campus
-from app.models.enums import CameraStatus, ConnectionType, NvrStatus
-from app.models.nvr import Nvr
+from app.models.enums import CameraStatus, CapabilityName, CapabilityStatus, ConnectionType, NvrStatus
+from app.models.nvr import Nvr, NvrCapability
+from app.schemas.camera import CameraOut, CapabilityOut, OperationQueued
 from app.schemas.common import Page
 from app.schemas.nvr import NvrCreate, NvrOut, NvrUpdate
-from app.services import audit
+from app.services import audit, nvr_ops
+from app.services.nvr_ops import Operation
+from app.workers.dispatch import QueueUnavailableError, enqueue
 
 router = APIRouter(prefix="/nvrs", tags=["nvrs"])
 
@@ -49,6 +53,9 @@ def _out(db: Session, nvr: Nvr) -> NvrOut:
         firmware=nvr.firmware,
         enabled=nvr.enabled,
         camera_count=cams,
+        utc_offset_minutes=nvr.utc_offset_minutes,
+        last_checked_at=nvr.last_checked_at,
+        last_success_at=nvr.last_success_at,
         created_at=nvr.created_at,
         updated_at=nvr.updated_at,
     )
@@ -72,6 +79,91 @@ def _require_campus(db: Session, campus_id: uuid.UUID) -> Campus:
             422, "validation_error", "Campus does not exist", [{"field": "campus_id", "message": "Unknown campus"}]
         )
     return campus
+
+
+def _queue(db: Session, nvr: Nvr, op: Operation) -> None:
+    """Claim the NVR's single in-flight slot and hand the work to a worker."""
+    if not nvr.enabled:
+        raise ApiError(409, "nvr_disabled", "Enable this NVR before testing it")
+    previous = nvr_ops.claim(db, nvr.id)
+    if previous is None:
+        raise ApiError(409, "operation_in_progress", "Another check is already running for this NVR")
+    try:
+        enqueue(nvr.id, op)
+    except QueueUnavailableError as exc:
+        nvr_ops.restore(db, nvr.id, previous, "Not checked: the background worker queue is unavailable")
+        raise ApiError(
+            503, "worker_unavailable", "The background worker queue is unavailable. Is Redis running?"
+        ) from exc
+
+
+def _trigger(
+    nvr_id: uuid.UUID, op: Operation, request: Request, user: AdminUser, db: Session, force: bool
+) -> OperationQueued:
+    nvr = _get_visible(db, user, nvr_id)
+    if nvr.status == NvrStatus.AUTH_FAILED and not force:
+        raise ApiError(
+            409,
+            "credentials_rejected",
+            "The NVR rejected these credentials earlier. Update them first: "
+            "repeated wrong attempts can lock the NVR account.",
+        )
+    _queue(db, nvr, op)
+    audit.record(
+        db,
+        request,
+        f"nvr.{op.value}",
+        actor=user,
+        entity_type="nvr",
+        entity_id=nvr.id,
+        campus_id=nvr.campus_id,
+        details={"name": nvr.name, "force": force},
+    )
+    db.commit()
+    return OperationQueued(nvr_id=nvr.id, operation=op.value)
+
+
+@router.post("/{nvr_id}/test", response_model=OperationQueued, status_code=202)
+def test_nvr(
+    nvr_id: uuid.UUID, request: Request, user: AdminUser, db: DbSession, force: bool = False
+) -> OperationQueued:
+    """Connect, read device info and probe capabilities. Does not change the camera inventory."""
+    return _trigger(nvr_id, Operation.TEST, request, user, db, force)
+
+
+@router.post("/{nvr_id}/discover", response_model=OperationQueued, status_code=202)
+def discover_nvr(
+    nvr_id: uuid.UUID, request: Request, user: AdminUser, db: DbSession, force: bool = False
+) -> OperationQueued:
+    """Re-read the camera list and stream profiles. Existing cameras and backup policies are kept."""
+    return _trigger(nvr_id, Operation.DISCOVER, request, user, db, force)
+
+
+@router.post("/{nvr_id}/reconnect", response_model=OperationQueued, status_code=202)
+def reconnect_nvr(
+    nvr_id: uuid.UUID, request: Request, user: AdminUser, db: DbSession, force: bool = False
+) -> OperationQueued:
+    """Full re-check after a change or outage: connection test plus camera discovery."""
+    return _trigger(nvr_id, Operation.RECONNECT, request, user, db, force)
+
+
+@router.get("/{nvr_id}/capabilities", response_model=list[CapabilityOut])
+def nvr_capabilities(nvr_id: uuid.UUID, user: CurrentUser, db: DbSession) -> list[CapabilityOut]:
+    nvr = _get_visible(db, user, nvr_id)
+    rows = {c.name: c for c in db.scalars(select(NvrCapability).where(NvrCapability.nvr_id == nvr.id))}
+    return [
+        CapabilityOut(name=n, status=r.status, detail=r.detail, checked_at=r.checked_at)
+        if (r := rows.get(n))
+        else CapabilityOut(name=n, status=CapabilityStatus.UNKNOWN, detail="Not checked yet", checked_at=None)
+        for n in CapabilityName
+    ]
+
+
+@router.get("/{nvr_id}/cameras", response_model=list[CameraOut])
+def nvr_cameras(nvr_id: uuid.UUID, user: CurrentUser, db: DbSession) -> list[CameraOut]:
+    nvr = _get_visible(db, user, nvr_id)
+    rows = list(db.scalars(select(Camera).where(Camera.nvr_id == nvr.id).order_by(Camera.channel_number)))
+    return cameras_out(db, rows)
 
 
 @router.get("", response_model=Page[NvrOut])
@@ -133,6 +225,13 @@ def create_nvr(payload: NvrCreate, request: Request, user: AdminUser, db: DbSess
         details={"name": nvr.name, "connection_type": nvr.connection_type.value},
     )
     db.commit()
+    if payload.auto_connect and nvr.enabled:
+        try:
+            _queue(db, nvr, Operation.RECONNECT)
+        except ApiError as exc:
+            # Registration itself succeeded; tell the user why nothing was queued instead of failing the save.
+            nvr_ops.restore(db, nvr.id, NvrStatus.PENDING, exc.message)
+        db.refresh(nvr)
     return _out(db, nvr)
 
 

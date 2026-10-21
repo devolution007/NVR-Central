@@ -1,5 +1,6 @@
 """Dahua adapter that talks to the NVR directly over HTTP CGI + RTSP (LAN or through the campus tunnel)."""
 
+import contextlib
 import re
 from datetime import UTC, datetime
 from urllib.parse import quote
@@ -46,9 +47,13 @@ def parse_profile(enc: dict[str, str], index: int, fmt: str, stream: StreamKind)
     if m and (not width or not height):
         width, height = int(m.group(1)), int(m.group(2))
     return StreamProfile(
-        stream=stream, codec=codec, width=width, height=height,
-        bitrate_kbps=_int(enc.get(base + "BitRate")), fps=_int(enc.get(base + "FPS")),
-    )  # fmt: skip
+        stream=stream,
+        codec=codec,
+        width=width,
+        height=height,
+        bitrate_kbps=_int(enc.get(base + "BitRate")),
+        fps=_int(enc.get(base + "FPS")),
+    )
 
 
 class DahuaDirectAdapter(NvrAdapter):
@@ -84,10 +89,8 @@ class DahuaDirectAdapter(NvrAdapter):
     def get_device_info(self) -> DeviceInfo:
         model = self.http.get_kv("/cgi-bin/magicBox.cgi?action=getDeviceType").get("type")
         firmware = None
-        try:
+        with contextlib.suppress(NvrProtocolError):
             firmware = self.http.get_kv("/cgi-bin/magicBox.cgi?action=getSoftwareVersion").get("version")
-        except NvrProtocolError:
-            pass
 
         warnings: list[str] = []
         device_time: datetime | None = None
@@ -101,10 +104,10 @@ class DahuaDirectAdapter(NvrAdapter):
             warnings.append("Could not read the NVR clock, so its timezone offset is unknown")
 
         tz_code: int | None = None
-        try:
-            tz_code = _int(self.http.get_kv("/cgi-bin/configManager.cgi?action=getConfig&name=NTP").get("table.NTP.TimeZone"))
-        except NvrProtocolError:
-            pass
+        with contextlib.suppress(NvrProtocolError):
+            tz_code = _int(
+                self.http.get_kv("/cgi-bin/configManager.cgi?action=getConfig&name=NTP").get("table.NTP.TimeZone")
+            )
         if offset is not None and tz_code is not None and tz_code in DAHUA_TZ_OFFSET_MINUTES:
             expected = DAHUA_TZ_OFFSET_MINUTES[tz_code]
             if expected != offset:
@@ -113,8 +116,14 @@ class DahuaDirectAdapter(NvrAdapter):
                     f"NVR clock suggests UTC{offset / 60:+.2f} but its timezone setting says UTC{expected / 60:+.2f}. "
                     f"The NVR clock may be wrong{note}."
                 )
-        return DeviceInfo(model=model, firmware=firmware, timezone_code=tz_code, device_time=device_time,
-                          utc_offset_minutes=offset, warnings=tuple(warnings))  # fmt: skip
+        return DeviceInfo(
+            model=model,
+            firmware=firmware,
+            timezone_code=tz_code,
+            device_time=device_time,
+            utc_offset_minutes=offset,
+            warnings=tuple(warnings),
+        )
 
     # -- channels -------------------------------------------------------------------------------------------
     def list_cameras(self) -> list[ChannelInfo]:
@@ -137,8 +146,10 @@ class DahuaDirectAdapter(NvrAdapter):
             if idx >= capacity:
                 continue  # trailing bookkeeping entry past the NVR's channel count
             e = entries[idx]
-            if not _is_real_address(e.get("DeviceInfo.Address")):
-                continue  # empty or disabled slot, not a camera
+            if e.get("DeviceInfo.Enable", "true").lower() == "false" or not _is_real_address(
+                e.get("DeviceInfo.Address")
+            ):
+                continue  # empty or disabled slot, not a camera (verified: channels 14-16 on the test NVR)
             profiles = tuple(
                 p
                 for p in (
@@ -160,8 +171,13 @@ class DahuaDirectAdapter(NvrAdapter):
         return channels
 
     def get_camera_status(self, channel_number: int) -> CameraProbe:
-        r = rtsp_describe(self._p.host, self._p.rtsp_port, self._p.username, self._p.password,
-                          f"/cam/realmonitor?channel={channel_number}&subtype=1")  # fmt: skip
+        r = rtsp_describe(
+            self._p.host,
+            self._p.rtsp_port,
+            self._p.username,
+            self._p.password,
+            f"/cam/realmonitor?channel={channel_number}&subtype=1",
+        )
         return CameraProbe(channel_number=channel_number, online=r.status == 200, detail=r.detail)
 
     # -- capabilities ---------------------------------------------------------------------------------------
@@ -174,25 +190,50 @@ class DahuaDirectAdapter(NvrAdapter):
         ]
 
         r = self.http.get("/cgi-bin/LogicDeviceManager.cgi?action=getCameraAll")
-        out.append(CapabilityResult(CapabilityName.CHANNEL_DISCOVERY, T if r.status_code == 200 else U,
-                                    "getCameraAll answered" if r.status_code == 200 else f"getCameraAll returned HTTP {r.status_code}"))  # fmt: skip
+        out.append(
+            CapabilityResult(
+                CapabilityName.CHANNEL_DISCOVERY,
+                T if r.status_code == 200 else U,
+                "getCameraAll answered" if r.status_code == 200 else f"getCameraAll returned HTTP {r.status_code}",
+            )
+        )
 
-        probe = rtsp_describe(self._p.host, self._p.rtsp_port, self._p.username, self._p.password,
-                              f"/cam/realmonitor?channel={ch}&subtype=1")  # fmt: skip
-        out.append(CapabilityResult(CapabilityName.LIVE_VIDEO, T if probe.status == 200 else K,
-                                    f"RTSP substream of channel {ch} answered" if probe.status == 200
-                                    else f"RTSP check on channel {ch} failed: {probe.detail}. Not proven unsupported"))  # fmt: skip
+        probe = rtsp_describe(
+            self._p.host,
+            self._p.rtsp_port,
+            self._p.username,
+            self._p.password,
+            f"/cam/realmonitor?channel={ch}&subtype=1",
+        )
+        out.append(
+            CapabilityResult(
+                CapabilityName.LIVE_VIDEO,
+                T if probe.status == 200 else K,
+                f"RTSP substream of channel {ch} answered"
+                if probe.status == 200
+                else f"RTSP check on channel {ch} failed: {probe.detail}. Not proven unsupported",
+            )
+        )
 
         out.append(self._probe_search(ch))
 
-        out.append(CapabilityResult(CapabilityName.RECORDING_DOWNLOAD, K,
-                                    "Not tested yet. A download is only attempted by a backup or manual export"))  # fmt: skip
+        out.append(
+            CapabilityResult(
+                CapabilityName.RECORDING_DOWNLOAD,
+                K,
+                "Not tested yet. A download is only attempted by a backup or manual export",
+            )
+        )
 
         snap = self.http.get(f"/cgi-bin/snapshot.cgi?channel={ch}")
         if snap.status_code == 200 and snap.content[:2] == b"\xff\xd8":
             out.append(CapabilityResult(CapabilityName.SNAPSHOT, T, f"JPEG snapshot of channel {ch} received"))
         else:
-            out.append(CapabilityResult(CapabilityName.SNAPSHOT, K, f"Snapshot of channel {ch} failed (HTTP {snap.status_code})"))
+            out.append(
+                CapabilityResult(
+                    CapabilityName.SNAPSHOT, K, f"Snapshot of channel {ch} failed (HTTP {snap.status_code})"
+                )
+            )
         return out
 
     def _probe_search(self, channel: int) -> CapabilityResult:
@@ -216,7 +257,5 @@ class DahuaDirectAdapter(NvrAdapter):
             return CapabilityResult(name, K, f"Search on channel {channel} returned HTTP {r.status_code}")
         finally:
             for action in ("close", "destroy"):
-                try:
+                with contextlib.suppress(NvrProtocolError, NvrAuthError, OSError):
                     self.http.get(f"/cgi-bin/mediaFileFind.cgi?action={action}&object={obj}")
-                except (NvrProtocolError, NvrAuthError, OSError):
-                    pass

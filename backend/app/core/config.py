@@ -18,6 +18,18 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cors_origins: str = "http://localhost:5173"
 
+    redis_url: str = "redis://127.0.0.1:16379/0"
+    # Loopback NVR addresses are refused by default (they would point at this server). Only tests turn this on.
+    allow_loopback_nvr_hosts: bool = False
+    # Tests run Celery tasks inline in the calling thread. Never enable in a real deployment.
+    celery_task_always_eager: bool = False
+
+    # WireGuard hub (campus connectivity). All optional: without a hub key the Connectivity page says so.
+    wg_hub_private_key: str = ""
+    wg_hub_endpoint: str = ""
+    wg_interface: str = "wg0"
+    wg_hub_conf_path: str = ""
+
     login_max_failures: int = 5
     login_lock_minutes: int = 15
     login_ip_limit_per_minute: int = 20

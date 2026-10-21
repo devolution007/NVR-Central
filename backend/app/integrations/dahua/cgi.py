@@ -44,7 +44,9 @@ class DahuaHttp:
     def __enter__(self) -> "DahuaHttp":
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None) -> None:
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None
+    ) -> None:
         self.close()
 
     def close(self) -> None:
