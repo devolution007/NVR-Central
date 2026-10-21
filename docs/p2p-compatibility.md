@@ -93,3 +93,10 @@ Next checks: try from a different network (phone hotspot), try the Go bridge fro
 - Same failure from two different PC networks points at the **NVR side** (its router/ISP NAT, likely symmetric or CGNAT) rather than the PC. This is an inference, not confirmed.
 - OpenDahua has no relay mode. dahua-p2p deliberately has none either (it uses the relay agent only to obtain a signature, then also hole-punches). DMSS works because it can use Dahua's relay.
 - Status for this NVR: **P2P direct connection = failed on hardware**; everything downstream stays untested.
+
+### 2026-10-21 — dahua-p2p Go bridge (Docker, ghcr.io/blackjid/dahua-p2p:latest)
+- Docker Desktop had to be started first (it was not running).
+- Run 3 times with `-debug`. Same result each time, in under 1 s: cloud main server reached, P2P server and relay server found, relay agent obtained, then **`connect P2P tunnel: p2p channel error: Not Found`** at "step 7: reading P2P channel response from device". The bridge exits, no RTSP listener ever opens.
+- This is a different failure point from OpenDahua (which got a channel response and failed later at the UDP punch). The two libraries disagree about the same NVR; the cause is **not identified**. "Not Found" could mean the cloud has no live registration for the device on that path, a serial or region mismatch, or a protocol difference. Do not assume it is the same NAT problem.
+- Docker adds a NAT layer on Windows, so a failure here is weaker evidence than a failure from a Linux host.
+- Status: live video via P2P = **failed on hardware (this NVR, this environment)**.
