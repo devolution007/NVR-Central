@@ -245,7 +245,10 @@ def main() -> None:
     ap.add_argument("--download", action="store_true", help="download the shortest found segment (buffered in RAM)")
     ap.add_argument("--timeout", type=float, default=45, help="per-step timeout in seconds")
     args = ap.parse_args()
-    sys.exit(asyncio.run(main_async(args)))
+    # OpenDahua sends UDP to a hostname (www.easy4ipcloud.com). Windows' default
+    # Proactor loop rejects that with WinError 10022, the selector loop resolves it.
+    with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
+        sys.exit(runner.run(main_async(args)))
 
 
 if __name__ == "__main__":

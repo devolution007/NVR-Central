@@ -75,3 +75,21 @@ Run the OpenDahua diagnostic and the bridge at the same time to answer the two-s
 6. Does RTSP playback work through the bridge, and is it a better download path?
 7. Substream codec (H.264 or H.265) and whether browser playback needs transcoding.
 8. Does DMSS keep working while our sessions are open?
+
+## Run log
+
+### 2026-10-21 — first hardware attempt (DHI-NVR2116HS-4KS3, from the Windows dev PC)
+- **Windows bug found and worked around.** OpenDahua 1.0.8 sends UDP to the hostname `www.easy4ipcloud.com`; Windows' default asyncio loop (Proactor) rejects that with `WinError 10022`. The diagnostic now uses `asyncio.SelectorEventLoop`. The app's P2P worker must do the same on Windows (Linux is not affected, untested).
+- **Cloud handshake: reached.** With the fix, the client resolved the Dahua cloud and exchanged packets.
+- **Device connection: FAILED** after about 6 s with `DahuaPeerToPeerConnectionError`: timeout waiting for the device. The library suggests a symmetric NAT breaking the UDP hole punch and says relay mode is not implemented. That is the library's guess, not confirmed here. Credentials are not the obvious cause (dahua-p2p documents a 403 at an earlier step for bad credentials), but not ruled out.
+- Nothing else could be tested (device info, CGI, channels, search, download all skipped).
+- Redacted report: `p2p-bridge/reports/diag_20261021_152233.json`.
+
+Next checks: try from a different network (phone hotspot), try the Go bridge from a non-Docker run or with a fixed UDP port, and confirm the NVR shows "Online" in DMSS at the time of the test.
+
+### 2026-10-21 — second attempt, different PC network
+- Identical failure on the second network (6.27 s, 3 attempts). Raising OpenDahua's per-packet handshake wait from 1 s to 8 s did not help (3 attempts, 27 s, same error), so it is not a latency/timeout problem.
+- Reading the code: the steps before the hole punch (cloud probe, device lookup, device probe, salt read, P2P channel create with the credential-derived key) all succeeded. So the cloud sees the NVR online, and the credentials were accepted at that stage. Only the direct UDP contact with the NVR's public address gets no reply.
+- Same failure from two different PC networks points at the **NVR side** (its router/ISP NAT, likely symmetric or CGNAT) rather than the PC. This is an inference, not confirmed.
+- OpenDahua has no relay mode. dahua-p2p deliberately has none either (it uses the relay agent only to obtain a signature, then also hole-punches). DMSS works because it can use Dahua's relay.
+- Status for this NVR: **P2P direct connection = failed on hardware**; everything downstream stays untested.
