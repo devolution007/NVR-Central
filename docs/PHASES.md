@@ -59,7 +59,7 @@ Costs and risks to be honest about:
 **Needs from you:** a way to reach the NVR by IP for one test. Simplest: run the diagnostic from a PC on the NVR's LAN (carry the repo on a laptop, or remote into a campus PC). Also its LAN IP (any value; kept in `.env`).
 **Gate:** each capability above is marked verified, unsupported, or unknown for this model.
 
-## Phase 1 — Foundation
+## Phase 1 — Foundation  (DONE 2026-10-21, awaiting your sign-off)
 - Monorepo, git init, `.env.example`, docker-compose (Postgres, Redis).
 - FastAPI + SQLAlchemy 2 + Alembic, UUID schema for core tables.
 - Auth: login/logout/refresh, hashed passwords, admin bootstrap without default credentials, RBAC with per-campus permissions.
@@ -69,6 +69,8 @@ Costs and risks to be honest about:
 - Tests: auth, permissions, campus CRUD.
 
 **Gate:** log in, create campuses, register an NVR as "pending" with a connection profile; app works with no NVRs.
+
+**Result:** gate met. Backend 51 tests, frontend 30 tests, ruff/mypy-strict/tsc/oxlint clean. See `README.md` and `docs/architecture.md`. Decision recorded: camera backup stream is selectable per camera (`sub` default, `main` optional); the selection UI arrives in Phase 4.
 
 ## Phase 2 — Campus Connectivity & NVR Inventory
 **2A — Tunnel infrastructure**
