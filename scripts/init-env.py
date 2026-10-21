@@ -39,7 +39,7 @@ def main() -> int:
     if not values["DATABASE_URL"]:
         values["DATABASE_URL"] = (
             f"postgresql+psycopg://{values['POSTGRES_USER']}:{values['POSTGRES_PASSWORD']}"
-            f"@localhost:{values['POSTGRES_HOST_PORT']}/{values['POSTGRES_DB']}"
+            f"@127.0.0.1:{values['POSTGRES_HOST_PORT']}/{values['POSTGRES_DB']}"
         )
 
     out = []

@@ -1,0 +1,46 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base, IdMixin, TimestampMixin
+from app.models.enums import BackupStream, CameraStatus, RecordingMode
+
+
+def _enum(e: type) -> SAEnum:
+    return SAEnum(e, native_enum=False, length=32, values_callable=lambda x: [m.value for m in x])
+
+
+class Camera(Base, IdMixin, TimestampMixin):
+    """A channel on an NVR. Populated by discovery in Phase 2; never deleted when a camera disappears."""
+
+    __tablename__ = "cameras"
+
+    nvr_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("nvrs.id"), index=True)
+    campus_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("campuses.id"), index=True)
+    # 1-based, matching Dahua CGI search and RTSP numbering (ChannelTitle[] is 0-based).
+    channel_number: Mapped[int] = mapped_column(Integer)
+    name: Mapped[str] = mapped_column(String(128), default="")
+    status: Mapped[CameraStatus] = mapped_column(_enum(CameraStatus), default=CameraStatus.UNKNOWN)
+    model: Mapped[str | None] = mapped_column(String(64), default=None)
+    last_discovered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+    __table_args__ = (UniqueConstraint("nvr_id", "channel_number", name="uq_cameras_nvr_channel"),)
+
+
+class CameraBackupPolicy(Base, IdMixin, TimestampMixin):
+    """Per-camera automatic backup settings. API and engine arrive in Phase 4."""
+
+    __tablename__ = "camera_backup_policies"
+
+    camera_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("cameras.id"), unique=True
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Substream by default: roughly 232 MB/hour versus 908 MB/hour for main on the test NVR.
+    backup_stream: Mapped[BackupStream] = mapped_column(_enum(BackupStream), default=BackupStream.SUB)
+    frequency_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    recording_mode: Mapped[RecordingMode] = mapped_column(_enum(RecordingMode), default=RecordingMode.ALL)
