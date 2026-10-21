@@ -7,3 +7,6 @@ p2p-bridge/reports/*
 !p2p-bridge/reports/.gitkeep
 p2p-bridge/downloads/
 *.dav
+
+# local dev admin credentials (generated)
+.dev-admin.txt

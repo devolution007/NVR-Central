@@ -64,7 +64,9 @@ http.interceptors.response.use(
     const url = config?.url ?? ''
     const isAuthCall = url.startsWith('/auth/login') || url.startsWith('/auth/refresh') || url.startsWith('/auth/logout')
 
-    if (error.response?.status === 401 && config && !config._retried && !isAuthCall) {
+    // No csrf_token cookie means there is no session to refresh (never signed in, or signed out).
+    const hasSession = readCookie('csrf_token') !== undefined
+    if (error.response?.status === 401 && config && !config._retried && !isAuthCall && hasSession) {
       config._retried = true
       try {
         await refreshSession()

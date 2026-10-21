@@ -1,4 +1,4 @@
-import { LogOut, Menu, Moon, Sun, X } from 'lucide-react'
+import { LogOut, Menu, Moon, Sun, Video, X } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
@@ -77,7 +77,6 @@ export function AppLayout() {
   const logout = useLogout()
   const { pathname } = useLocation()
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setSidebarOpen(false), [pathname])
 
   return (
