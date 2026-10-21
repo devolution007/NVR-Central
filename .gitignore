@@ -1,0 +1,9 @@
+.env
+*.env.local
+.venv/
+__pycache__/
+node_modules/
+p2p-bridge/reports/*
+!p2p-bridge/reports/.gitkeep
+p2p-bridge/downloads/
+*.dav

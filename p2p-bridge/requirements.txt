@@ -1,0 +1,2 @@
+# Pinned for the Phase 0 feasibility spike. Verified against source on 2026-10-21.
+opendahua==1.0.8
