@@ -65,6 +65,12 @@ class DahuaHttp:
             raise NvrUnreachableError(f"Network error talking to the NVR ({type(exc).__name__}).") from exc
         if resp.status_code == 401:
             raise NvrAuthError("The NVR rejected the username or password (or the account is locked).")
+        if resp.status_code == 403:
+            # Observed on the test NVR while its admin account was locked after repeated failed logins.
+            raise NvrAuthError(
+                "The NVR refused access (HTTP 403). The account is most likely locked after failed logins: "
+                "wait for the lock to expire or unlock it on the NVR. Do not retry meanwhile."
+            )
         return resp
 
     def get_kv(self, path: str) -> dict[str, str]:

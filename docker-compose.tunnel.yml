@@ -1,0 +1,49 @@
+# WireGuard hub for campus connectivity. UNVERIFIED: written from the WireGuard and linuxserver/wireguard
+# documentation, never run end to end. It needs a Linux host with a public IP and UDP 51820 reachable (a Windows PC
+# behind NAT cannot be the hub). See docs/tunnel.md before using.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml --profile app up -d --build
+#
+# The worker and scheduler join the hub's network namespace so their traffic to 10.77.x.x goes through the tunnel
+# interface, and so `wg show` (tunnel health) can see it. Their other connections (Postgres, Redis) then use the
+# hub container's network, which is why those hostnames are re-pointed below.
+services:
+  wireguard:
+    image: lscr.io/linuxserver/wireguard:latest
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+    ports:
+      - "51820:51820/udp" # the only port this stack exposes publicly
+    volumes:
+      - ./infrastructure/wireguard:/config/wg_confs
+    depends_on:
+      - db
+      - redis
+
+  backend:
+    environment:
+      WG_HUB_CONF_PATH: /wg/wg0.conf
+    volumes:
+      - ./infrastructure/wireguard:/wg
+
+  worker:
+    network_mode: "service:wireguard"
+    cap_add:
+      - NET_ADMIN
+    environment:
+      WG_HUB_CONF_PATH: /wg/wg0.conf
+    volumes:
+      - ./infrastructure/wireguard:/wg
+    depends_on:
+      - wireguard
+
+  beat:
+    network_mode: "service:wireguard"
+    depends_on:
+      - wireguard

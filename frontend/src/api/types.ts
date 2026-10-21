@@ -66,6 +66,9 @@ export interface Nvr {
   firmware: string | null
   enabled: boolean
   camera_count: number
+  utc_offset_minutes: number | null
+  last_checked_at: string | null
+  last_success_at: string | null
   created_at: string
   updated_at: string
 }
@@ -81,6 +84,8 @@ export interface NvrInput {
   password?: string
   p2p_serial?: string
   enabled: boolean
+  /** Queue a connection test and camera discovery right after saving (create only). */
+  auto_connect?: boolean
 }
 
 export interface DashboardSummary {
@@ -89,4 +94,94 @@ export interface DashboardSummary {
   nvrs_by_status: Record<NvrStatus, number>
   cameras: number
   cameras_with_backup: number
+}
+
+export type CameraStatus = 'unknown' | 'online' | 'offline' | 'unavailable'
+export type CapabilityStatus = 'supported_tested' | 'unsupported' | 'unknown'
+export type CapabilityName =
+  | 'p2p_auth'
+  | 'device_info'
+  | 'channel_discovery'
+  | 'live_video'
+  | 'recording_search'
+  | 'recording_download'
+  | 'snapshot'
+
+export interface StreamProfile {
+  stream: 'main' | 'sub'
+  codec: string | null
+  width: number | null
+  height: number | null
+  bitrate_kbps: number | null
+  fps: number | null
+}
+
+export interface Camera {
+  id: string
+  nvr_id: string
+  nvr_name: string
+  campus_id: string
+  campus_name: string
+  channel_number: number
+  name: string
+  model: string | null
+  status: CameraStatus
+  status_detail: string | null
+  status_checked_at: string | null
+  last_discovered_at: string | null
+  main_stream: StreamProfile | null
+  sub_stream: StreamProfile | null
+}
+
+export interface Capability {
+  name: CapabilityName
+  status: CapabilityStatus
+  detail: string
+  checked_at: string | null
+}
+
+export type PeerMode = 'connector' | 'router'
+export type PeerStatus = 'connected' | 'stale' | 'never_connected' | 'unknown' | 'revoked'
+
+export interface TunnelHub {
+  configured: boolean
+  public_key: string | null
+  endpoint: string | null
+  network: string
+  hub_address: string
+  notes: string[]
+}
+
+export interface TunnelPeer {
+  id: string
+  campus_id: string
+  campus_name: string
+  name: string
+  mode: PeerMode
+  public_key: string
+  tunnel_ip: string
+  virtual_subnet: string
+  lan_cidr: string
+  nvr_address_pattern: string
+  status: PeerStatus
+  last_handshake_at: string | null
+  health_checked_at: string | null
+  rx_bytes: number | null
+  tx_bytes: number | null
+  created_at: string
+}
+
+export interface PeerInput {
+  campus_id: string
+  name: string
+  mode: PeerMode
+  lan_cidr: string
+  public_key?: string
+}
+
+export interface PeerCreated {
+  peer: TunnelPeer
+  config: string | null
+  private_key_shown_once: boolean
+  warnings: string[]
 }

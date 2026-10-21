@@ -31,7 +31,7 @@ def setup_campus(admin_api: Api, name: str = "C1") -> str:
 
 def test_register_nvr_is_pending_and_never_leaks_secrets(admin_api: Api, db) -> None:
     cid = setup_campus(admin_api)
-    r = admin_api.post("/api/v1/nvrs", json=lan(cid, connection_type="p2p", p2p_serial=SERIAL))
+    r = admin_api.post("/api/v1/nvrs", json=lan(cid, connection_type="p2p", p2p_serial=SERIAL, auto_connect=False))
     assert r.status_code == 201
     body = r.json()
     assert body["status"] == "pending" and body["has_password"] is True
@@ -142,8 +142,8 @@ def test_campus_scoped_visibility_and_write_protection(admin_api: Api, db) -> No
 
 def test_filters(admin_api: Api, db) -> None:
     cid = setup_campus(admin_api)
-    admin_api.post("/api/v1/nvrs", json=lan(cid, name="Alpha"))
-    admin_api.post("/api/v1/nvrs", json=lan(cid, name="Beta"))
+    admin_api.post("/api/v1/nvrs", json=lan(cid, name="Alpha", auto_connect=False))
+    admin_api.post("/api/v1/nvrs", json=lan(cid, name="Beta", auto_connect=False))
     row = db.scalar(select(Nvr).where(Nvr.name == "Beta"))
     row.status = "offline"
     db.commit()

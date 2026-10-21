@@ -1,6 +1,6 @@
 import { Info, Pencil, Plus, Server, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { errorMessage } from '@/api/client'
 import type { Nvr } from '@/api/types'
@@ -15,7 +15,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { isAdmin, useAuth } from '@/features/auth/store'
 import { useCampuses } from '@/features/campuses/api'
 import { useDeleteNvr, useNvrs } from '@/features/nvrs/api'
+import { NvrActions } from '@/features/nvrs/NvrActions'
 import { NvrFormDialog } from '@/features/nvrs/NvrFormDialog'
+import { timeAgo } from '@/lib/format'
 
 const ALL = 'all'
 const TYPE_LABEL = { tunnel: 'Tunnel', lan: 'LAN', p2p: 'P2P' } as const
@@ -57,8 +59,8 @@ export function NvrsPage() {
       <div role="note" className="mb-4 flex gap-2 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
         <p>
-          Registered NVRs show <strong className="text-foreground">Not tested</strong> until Phase 2 adds connection testing and camera discovery.
-          Nothing here has contacted the device.
+          A new NVR is checked automatically after you save it. <strong className="text-foreground">Not tested</strong> means no check has run, which is not
+          the same as offline. NVRs that rejected their credentials are not re-checked automatically, to avoid locking the NVR account.
         </p>
       </div>
 
@@ -117,15 +119,18 @@ export function NvrsPage() {
                 <TableHead>Connection</TableHead>
                 <TableHead>Model</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Last checked</TableHead>
                 <TableHead className="text-right">Cameras</TableHead>
-                {admin && <TableHead className="w-24 text-right">Actions</TableHead>}
+                {admin && <TableHead className="w-60 text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {data?.items.map((n) => (
                 <TableRow key={n.id} className={n.enabled ? undefined : 'opacity-60'}>
                   <TableCell className="font-medium">
-                    {n.name}
+                    <Link to={`/nvrs/${n.id}`} className="hover:underline">
+                      {n.name}
+                    </Link>
                     {!n.enabled && <span className="ml-2 text-xs font-normal text-muted-foreground">(disabled)</span>}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{n.campus_name}</TableCell>
@@ -139,15 +144,21 @@ export function NvrsPage() {
                   <TableCell>
                     <NvrStatusIndicator status={n.status} message={n.status_message} />
                   </TableCell>
+                  <TableCell className="text-muted-foreground" title={n.last_checked_at ?? undefined}>
+                    {timeAgo(n.last_checked_at)}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{n.camera_count}</TableCell>
                   {admin && (
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" aria-label={`Edit ${n.name}`} onClick={() => openForm(n)}>
-                        <Pencil />
-                      </Button>
-                      <Button variant="ghost" size="icon" aria-label={`Delete ${n.name}`} onClick={() => setDeleting(n)}>
-                        <Trash2 />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <NvrActions nvr={n} />
+                        <Button variant="ghost" size="icon" aria-label={`Edit ${n.name}`} onClick={() => openForm(n)}>
+                          <Pencil />
+                        </Button>
+                        <Button variant="ghost" size="icon" aria-label={`Delete ${n.name}`} onClick={() => setDeleting(n)}>
+                          <Trash2 />
+                        </Button>
+                      </div>
                     </TableCell>
                   )}
                 </TableRow>

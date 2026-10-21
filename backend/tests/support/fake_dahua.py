@@ -38,6 +38,7 @@ class SimNvr:
     has_media_find: bool = True
     snapshot_ok: bool = True
     is_dahua: bool = True
+    locked: bool = False  # real NVRs answer 403 while the account is locked
     delay_seconds: float = 0.0
     requests: list[str] = field(default_factory=list)
 
@@ -77,6 +78,8 @@ def _make_handler(nvr: SimNvr) -> type[BaseHTTPRequestHandler]:
                 time.sleep(nvr.delay_seconds)
             if not nvr.is_dahua:
                 return self._send(404)
+            if nvr.locked:
+                return self._send(403)
             if not _digest_ok("GET", self.headers.get("Authorization"), nvr):
                 self.send_response(401)
                 self.send_header("WWW-Authenticate", f'Digest realm="{REALM}", qop="auth", nonce="{NONCE}"')

@@ -8,6 +8,7 @@ import {
   HardDrive,
   LayoutDashboard,
   type LucideIcon,
+  Network,
   Server,
   Settings,
   Users,
@@ -41,6 +42,7 @@ export const NAV: NavGroup[] = [
   {
     items: [
       { label: 'Campuses', to: '/campuses', icon: Building2 },
+      { label: 'Campus Connectivity', to: '/connectivity', icon: Network, adminOnly: true },
       { label: 'NVR Management', to: '/nvrs', icon: Server },
       { label: 'Camera Management', to: '/cameras', icon: Camera },
       { label: 'Recording Browser', to: '/recordings', icon: Film, phase: 4 },

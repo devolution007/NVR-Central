@@ -65,7 +65,7 @@ function NvrForm({ nvr, campuses, defaultCampusId, onDone }: { nvr?: Nvr; campus
     try {
       if (nvr) await update.mutateAsync({ id: nvr.id, ...payload })
       else await create.mutateAsync(payload)
-      toast.success(nvr ? 'NVR updated' : 'NVR registered. It stays "Not tested" until connection testing arrives in Phase 2.')
+      toast.success(nvr ? 'NVR updated. Use Test connection to re-check it.' : 'NVR registered. Checking the connection now.')
       onDone()
     } catch (err) {
       if (err instanceof ApiError) {
@@ -237,7 +237,7 @@ export function NvrFormDialog({
         <DialogHeader>
           <DialogTitle>{nvr ? 'Edit NVR' : 'Register NVR'}</DialogTitle>
           <DialogDescription>
-            Saving does not contact the NVR yet. Connection testing and camera discovery arrive in Phase 2.
+            {nvr ? 'Changing the address or credentials resets the status to "Not tested".' : 'After saving, the server tests the connection and discovers cameras in the background.'}
           </DialogDescription>
         </DialogHeader>
         <NvrForm key={nvr?.id ?? 'new'} nvr={nvr} campuses={campuses} defaultCampusId={defaultCampusId} onDone={() => onOpenChange(false)} />

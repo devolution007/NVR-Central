@@ -165,6 +165,13 @@ def test_wrong_password_raises_auth_error_without_leaking_it(sim) -> None:
     )
 
 
+def test_locked_account_403_is_an_auth_error_that_says_not_to_retry(sim) -> None:
+    nvr, server = sim
+    nvr.locked = True
+    with pytest.raises(NvrAuthError, match="locked"):
+        DahuaDirectAdapter(params(server)).connect()
+
+
 def test_non_dahua_device_is_a_protocol_error(sim) -> None:
     nvr, server = sim
     nvr.is_dahua = False

@@ -1,4 +1,4 @@
-import { Camera, Construction } from 'lucide-react'
+import { Construction } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { EmptyState, PageHeader } from '@/components/PageHeader'
 import { PLANNED_PAGES } from '@/layouts/nav'
@@ -18,18 +18,6 @@ export function PlannedPage() {
       <PageHeader title={item?.label ?? 'Not available yet'} />
       <EmptyState icon={<Construction className="size-8" />} title={`Planned for Phase ${item?.phase ?? '?'}`}>
         {PHASE_NOTE[item?.phase ?? 0] ?? 'This page is not built yet.'}
-      </EmptyState>
-    </>
-  )
-}
-
-export function CamerasPage() {
-  return (
-    <>
-      <PageHeader title="Camera Management" description="Cameras discovered on each NVR, grouped by campus" />
-      <EmptyState icon={<Camera className="size-8" />} title="No cameras discovered yet">
-        Cameras appear here after an NVR connects and its channels are discovered (Phase 2). Backup settings, including the choice of main or substream per camera
-        (substream by default), are configured here from Phase 4. Register NVRs on the <Link to="/nvrs" className="font-medium text-primary underline underline-offset-4">NVR Management</Link> page.
       </EmptyState>
     </>
   )

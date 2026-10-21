@@ -7,7 +7,10 @@ import { CampusesPage } from '@/pages/CampusesPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { NvrsPage } from '@/pages/NvrsPage'
-import { CamerasPage, NotFoundPage, PlannedPage } from '@/pages/PlaceholderPages'
+import { NotFoundPage, PlannedPage } from '@/pages/PlaceholderPages'
+import { CamerasPage } from '@/pages/CamerasPage'
+import { ConnectivityPage } from '@/pages/ConnectivityPage'
+import { NvrDetailPage } from '@/pages/NvrDetailPage'
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
 
 export default function App() {
@@ -21,6 +24,8 @@ export default function App() {
             <Route index element={<DashboardPage />} />
             <Route path="campuses" element={<CampusesPage />} />
             <Route path="nvrs" element={<NvrsPage />} />
+            <Route path="nvrs/:id" element={<NvrDetailPage />} />
+            <Route path="connectivity" element={<ConnectivityPage />} />
             <Route path="cameras" element={<CamerasPage />} />
             {PLANNED_PAGES.map((p) => (
               <Route key={p.to} path={p.to.slice(1)} element={<PlannedPage />} />
