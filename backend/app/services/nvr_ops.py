@@ -223,8 +223,17 @@ def execute(db: Session, nvr_id: uuid.UUID, op: Operation) -> NvrStatus:
         return _finish(db, nvr, status, exc.message)
     except NvrError as exc:
         return _finish(db, nvr, NvrStatus.OFFLINE, exc.message)
-    except Exception:  # noqa: BLE001 - a worker must always leave the NVR in a resolved state
-        log.exception("Unexpected error while checking NVR %s", nvr_id)
+    except Exception as exc:  # noqa: BLE001 - a worker must always leave the NVR in a resolved state
+        # Log the exception type and call stack but not its message: library errors can echo request details,
+        # and NVR credentials must never reach the logs.
+        import traceback
+
+        log.error(
+            "Unexpected %s while checking NVR %s\n%s",
+            type(exc).__name__,
+            nvr_id,
+            "".join(traceback.format_tb(exc.__traceback__)),
+        )
         return _finish(db, nvr, NvrStatus.OFFLINE, "Unexpected error during the check. See the server log.")
 
     assert data.info is not None

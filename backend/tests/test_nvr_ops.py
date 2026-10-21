@@ -62,7 +62,9 @@ def test_discover_stores_device_cameras_profiles_and_capabilities(db, adapter) -
     profiles = list(db.scalars(select(CameraStreamProfile).where(CameraStreamProfile.camera_id == c[1].id)))
     assert {p.stream.value for p in profiles} == {"main", "sub"}
     caps = {x.name: x.status for x in db.scalars(select(NvrCapability).where(NvrCapability.nvr_id == nvr.id))}
-    assert caps[CapabilityName.RECORDING_DOWNLOAD] == CapabilityStatus.UNKNOWN  # connecting never implies downloads work
+    assert (
+        caps[CapabilityName.RECORDING_DOWNLOAD] == CapabilityStatus.UNKNOWN
+    )  # connecting never implies downloads work
     assert caps[CapabilityName.LIVE_VIDEO] == CapabilityStatus.SUPPORTED_TESTED
 
 
@@ -81,7 +83,9 @@ def test_resync_is_idempotent_keeps_ids_and_preserves_backup_policy(db, adapter)
     assert second[1].id == first[1].id and second[1].name == "Renamed lobby"
     policy = db.scalar(select(CameraBackupPolicy).where(CameraBackupPolicy.camera_id == first[1].id))
     assert policy is not None and policy.enabled is True and policy.backup_stream.value == "sub"
-    assert db.scalar(select(CameraStreamProfile).where(CameraStreamProfile.camera_id == second[1].id).limit(1)) is not None
+    assert (
+        db.scalar(select(CameraStreamProfile).where(CameraStreamProfile.camera_id == second[1].id).limit(1)) is not None
+    )
     assert len(list(db.scalars(select(CameraStreamProfile)))) == 4  # profiles updated in place, not multiplied
 
 
@@ -160,7 +164,9 @@ def test_missing_channel_discovery_means_partially_supported(db, adapter) -> Non
 def test_clock_warning_is_surfaced_on_a_connected_nvr(db, adapter) -> None:
     from dataclasses import replace
 
-    adapter.info = replace(adapter.info, warnings=("NVR clock suggests UTC+1.00 but its timezone setting says UTC+5.00.",))
+    adapter.info = replace(
+        adapter.info, warnings=("NVR clock suggests UTC+1.00 but its timezone setting says UTC+5.00.",)
+    )
     nvr = make_nvr(db)
     assert nvr_ops.execute(db, nvr.id, Operation.TEST) == NvrStatus.CONNECTED
     db.refresh(nvr)
@@ -206,7 +212,9 @@ def test_periodic_check_skips_rejected_credentials_p2p_disabled_and_busy_nvrs(db
     make_nvr(db, campus, name="auth", status=NvrStatus.AUTH_FAILED)
     make_nvr(db, campus, name="busy", status=NvrStatus.CONNECTING)
     make_nvr(db, campus, name="off", enabled=False)
-    make_nvr(db, campus, name="p2p", connection_type=ConnectionType.P2P, p2p_serial_encrypted=encrypt_secret("ABCD1234"))
+    make_nvr(
+        db, campus, name="p2p", connection_type=ConnectionType.P2P, p2p_serial_encrypted=encrypt_secret("ABCD1234")
+    )
     assert tasks.check_all() == 1
     db.expire_all()
     assert db.get(Nvr, ok.id).status == NvrStatus.CONNECTED

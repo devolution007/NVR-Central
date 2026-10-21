@@ -160,7 +160,9 @@ def test_wrong_password_raises_auth_error_without_leaking_it(sim) -> None:
     _, server = sim
     with pytest.raises(NvrAuthError) as exc:
         DahuaDirectAdapter(params(server, "wrong-password-xyz")).connect()
-    assert "wrong-password-xyz" not in exc.value.message and "wrong-password-xyz" not in repr(params(server, "wrong-password-xyz"))
+    assert "wrong-password-xyz" not in exc.value.message and "wrong-password-xyz" not in repr(
+        params(server, "wrong-password-xyz")
+    )
 
 
 def test_non_dahua_device_is_a_protocol_error(sim) -> None:

@@ -103,7 +103,9 @@ def _make_handler(nvr: SimNvr) -> type[BaseHTTPRequestHandler]:
                 if name == "ChannelTitle":
                     rows = "".join(f"table.ChannelTitle[{i}].Name=Ch{i + 1}\r\n" for i in range(nvr.capacity))
                     for i, c in enumerate(nvr.cameras[: nvr.capacity]):
-                        rows = rows.replace(f"table.ChannelTitle[{i}].Name=Ch{i + 1}", f"table.ChannelTitle[{i}].Name={c.name}")
+                        rows = rows.replace(
+                            f"table.ChannelTitle[{i}].Name=Ch{i + 1}", f"table.ChannelTitle[{i}].Name={c.name}"
+                        )
                     return self._send(200, rows.encode())
                 if name == "Encode":
                     rows = ""
@@ -137,7 +139,9 @@ def _make_handler(nvr: SimNvr) -> type[BaseHTTPRequestHandler]:
                     )
                 return self._send(200, rows.encode())
             if u.path.endswith("snapshot.cgi"):
-                return self._send(200, b"\xff\xd8\xff" + b"0" * 64, "image/jpeg") if nvr.snapshot_ok else self._send(500)
+                return (
+                    self._send(200, b"\xff\xd8\xff" + b"0" * 64, "image/jpeg") if nvr.snapshot_ok else self._send(500)
+                )
             if u.path.endswith("mediaFileFind.cgi"):
                 if not nvr.has_media_find:
                     return self._send(404)
@@ -160,6 +164,7 @@ class FakeDahuaServer:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._ready = threading.Event()
         self._stop: asyncio.Event | None = None
+        self._stopped = False
         self._thread: threading.Thread | None = None
 
     def start(self) -> "FakeDahuaServer":
@@ -170,6 +175,9 @@ class FakeDahuaServer:
         return self
 
     def stop(self) -> None:
+        if self._stopped:
+            return
+        self._stopped = True
         self._http.shutdown()
         self._http.server_close()
         if self._loop and self._stop is not None:
@@ -187,16 +195,29 @@ class FakeDahuaServer:
                     head = (await reader.readuntil(b"\r\n\r\n")).decode()
                     first = head.split("\r\n")[0].split(" ")
                     method, uri = first[0], first[1]
-                    auth = next((ln.split(":", 1)[1].strip() for ln in head.split("\r\n") if ln.lower().startswith("authorization")), None)
-                    cseq = next((ln.split(":", 1)[1].strip() for ln in head.split("\r\n") if ln.lower().startswith("cseq")), "0")
+                    auth = next(
+                        (
+                            ln.split(":", 1)[1].strip()
+                            for ln in head.split("\r\n")
+                            if ln.lower().startswith("authorization")
+                        ),
+                        None,
+                    )
+                    cseq = next(
+                        (ln.split(":", 1)[1].strip() for ln in head.split("\r\n") if ln.lower().startswith("cseq")), "0"
+                    )
                     ch = re.search(r"channel=(\d+)", uri)
                     ch_idx = int(ch.group(1)) - 1 if ch else -1
                     if not _digest_ok(method, auth, self.nvr):
-                        writer.write(f'RTSP/1.0 401 Unauthorized\r\nCSeq: {cseq}\r\nWWW-Authenticate: Digest realm="{REALM}", nonce="{NONCE}"\r\n\r\n'.encode())
+                        writer.write(
+                            f'RTSP/1.0 401 Unauthorized\r\nCSeq: {cseq}\r\nWWW-Authenticate: Digest realm="{REALM}", nonce="{NONCE}"\r\n\r\n'.encode()
+                        )
                     else:
                         cams = self.nvr.cameras
                         ok = 0 <= ch_idx < len(cams) and cams[ch_idx].rtsp_ok and cams[ch_idx].enable
-                        writer.write(f"RTSP/1.0 {200 if ok else 404} {'OK' if ok else 'Not Found'}\r\nCSeq: {cseq}\r\n\r\n".encode())
+                        writer.write(
+                            f"RTSP/1.0 {200 if ok else 404} {'OK' if ok else 'Not Found'}\r\nCSeq: {cseq}\r\n\r\n".encode()
+                        )
                     await writer.drain()
             except Exception:
                 pass

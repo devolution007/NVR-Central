@@ -166,3 +166,19 @@ def admin(db: Any) -> User:
 def admin_api(api: Api, admin: User) -> Api:
     assert api.login("admin").status_code == 200
     return api
+
+
+@pytest.fixture(autouse=True)
+def _block_real_devices() -> Iterator[None]:
+    """Safety net: tests may talk to the loopback simulator, never to a real address (see NetworkBlockedAdapter)."""
+    from app.integrations.adapter_factory import override_adapter
+    from app.integrations.dahua.direct import DahuaDirectAdapter
+    from tests.support.scripted import NetworkBlockedAdapter
+
+    def guard(nvr: Any, params: Any) -> Any:
+        if params.host.startswith("127."):
+            return DahuaDirectAdapter(params)
+        return NetworkBlockedAdapter(params.host)
+
+    with override_adapter(guard):
+        yield
