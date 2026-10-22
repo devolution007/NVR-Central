@@ -7,10 +7,12 @@ import {
   Film,
   HardDrive,
   LayoutDashboard,
+  LayoutGrid,
   type LucideIcon,
   Network,
   Server,
   Settings,
+  Star,
   Users,
   Video,
 } from 'lucide-react'
@@ -34,9 +36,9 @@ export const NAV: NavGroup[] = [
   {
     label: 'Live Monitoring',
     items: [
-      { label: 'All Cameras', to: '/live', icon: Video, phase: 3 },
-      { label: 'Favorites', to: '/live/favorites', icon: Video, phase: 3 },
-      { label: 'Saved Layouts', to: '/live/layouts', icon: Video, phase: 3 },
+      { label: 'All Cameras', to: '/live', icon: Video },
+      { label: 'Favorites', to: '/live/favorites', icon: Star },
+      { label: 'Saved Layouts', to: '/live/layouts', icon: LayoutGrid },
     ],
   },
   {

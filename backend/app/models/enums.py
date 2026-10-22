@@ -57,6 +57,12 @@ class StreamKind(StrEnum):
     SUB = "sub"
 
 
+class StreamSessionStatus(StrEnum):
+    ACTIVE = "active"
+    ENDED = "ended"  # the viewer closed it
+    EXPIRED = "expired"  # no keepalive arrived in time (browser closed, network lost)
+
+
 class CapabilityName(StrEnum):
     P2P_AUTH = "p2p_auth"
     DEVICE_INFO = "device_info"

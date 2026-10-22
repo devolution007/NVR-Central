@@ -24,6 +24,16 @@ class Settings(BaseSettings):
     # Tests run Celery tasks inline in the calling thread. Never enable in a real deployment.
     celery_task_always_eager: bool = False
 
+    # Live view (MediaMTX). The backend is the only client of both URLs; browsers never reach MediaMTX directly.
+    mediamtx_api_url: str = "http://127.0.0.1:9997"
+    mediamtx_hls_url: str = "http://127.0.0.1:8888"
+    stream_session_ttl_seconds: int = 60  # a viewer must send a keepalive within this time or the session expires
+    # Concurrent upstream streams per NVR. 8 simultaneous substreams were measured on the test NVR; 16 was not tested.
+    max_streams_per_nvr: int = 8
+    max_streams_total: int = 40
+    # auto: convert to H.264 unless the camera already sends H.264. always / never override.
+    stream_transcode: str = "auto"
+
     # WireGuard hub (campus connectivity). All optional: without a hub key the Connectivity page says so.
     wg_hub_private_key: str = ""
     wg_hub_endpoint: str = ""

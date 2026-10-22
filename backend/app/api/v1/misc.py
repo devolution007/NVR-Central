@@ -2,11 +2,13 @@ from fastapi import APIRouter, Query
 from sqlalchemy import func, select, text
 
 from app.api.deps import AdminUser, CurrentUser, DbSession, allowed_campus_ids
+from app.db.base import utcnow
 from app.models.audit import AuditLog
 from app.models.camera import Camera, CameraBackupPolicy
 from app.models.campus import Campus
-from app.models.enums import CameraStatus, NvrStatus
+from app.models.enums import CameraStatus, NvrStatus, StreamSessionStatus
 from app.models.nvr import Nvr
+from app.models.streaming import StreamSession
 from app.schemas.audit import AuditLogOut
 from app.schemas.common import Page
 
@@ -32,7 +34,14 @@ def dashboard_summary(user: CurrentUser, db: DbSession) -> dict[str, object]:
         .join(Camera, Camera.id == CameraBackupPolicy.camera_id)
         .where(CameraBackupPolicy.enabled.is_(True))
     )
+    streams = (
+        select(func.count())
+        .select_from(StreamSession)
+        .join(Camera, Camera.id == StreamSession.camera_id)
+        .where(StreamSession.status == StreamSessionStatus.ACTIVE, StreamSession.expires_at > utcnow())
+    )
     if allowed is not None:
+        streams = streams.where(Camera.campus_id.in_(allowed))
         campuses = campuses.where(Campus.id.in_(allowed))
         nvrs = nvrs.where(Nvr.campus_id.in_(allowed))
         cameras = cameras.where(Camera.campus_id.in_(allowed))
@@ -47,6 +56,7 @@ def dashboard_summary(user: CurrentUser, db: DbSession) -> dict[str, object]:
         "nvrs_by_status": by_status,
         "cameras": db.scalar(cameras) or 0,
         "cameras_with_backup": db.scalar(backups) or 0,
+        "active_streams": db.scalar(streams) or 0,
     }
 
 

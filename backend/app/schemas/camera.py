@@ -30,6 +30,7 @@ class CameraOut(BaseModel):
     last_discovered_at: datetime | None
     main_stream: StreamProfileOut | None
     sub_stream: StreamProfileOut | None
+    is_favorite: bool = False
 
 
 class CameraStatusOut(BaseModel):

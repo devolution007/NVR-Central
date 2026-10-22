@@ -49,3 +49,11 @@ def refresh_tunnel_health() -> int:
 
     with get_sessionmaker()() as db:
         return tunnel.refresh_health(db)
+
+
+@celery_app.task(name="streams.sweep")
+def sweep_streams() -> int:
+    from app.streaming import manager
+
+    with get_sessionmaker()() as db:
+        return manager.sweep_expired(db)

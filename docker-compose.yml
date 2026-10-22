@@ -35,6 +35,17 @@ services:
       timeout: 3s
       retries: 10
 
+  # Live-view gateway: pulls camera RTSP on demand, converts H.265 to H.264 when needed, serves HLS to the backend.
+  # Ports are published to this machine only; browsers never connect here (the backend proxies after authorising).
+  mediamtx:
+    image: bluenviron/mediamtx:latest-ffmpeg
+    restart: unless-stopped
+    volumes:
+      - ./streaming/mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "127.0.0.1:9997:9997" # API (development: backend on the host)
+      - "127.0.0.1:8888:8888" # HLS (development: backend on the host)
+
   backend:
     profiles: ["app"]
     build: ./backend
@@ -43,6 +54,8 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-nvr_central}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-nvr_central}
       REDIS_URL: redis://redis:6379/0
+      MEDIAMTX_API_URL: http://mediamtx:9997
+      MEDIAMTX_HLS_URL: http://mediamtx:8888
     depends_on:
       db:
         condition: service_healthy

@@ -1,0 +1,36 @@
+# MediaMTX for NVR Central live viewing. Camera paths are created and removed at runtime by the backend through the
+# API (see backend/app/streaming), so nothing about cameras or credentials is written in this file.
+#
+# SECURITY: this server has no user accounts. It is reachable only by the backend (and by FFmpeg running inside this
+# container). Never publish ports 9997 or 8888 beyond 127.0.0.1, and never expose them to the internet. Browsers
+# never talk to MediaMTX: the backend proxies HLS after checking the user's session and campus access.
+logLevel: info
+
+api: true
+apiAddress: :9997
+
+rtsp: true
+rtspAddress: :8554
+rtspTransports: [tcp]
+
+hls: true
+hlsAddress: :8888
+hlsVariant: fmp4
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsAlwaysRemux: false
+hlsMuxerCloseAfter: 10s
+hlsAllowOrigins: []
+
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+      - action: read
+      - action: playback
+      - action: api
+
+paths: {}

@@ -18,5 +18,6 @@ celery_app.conf.update(
     beat_schedule={
         "nvr-health-check": {"task": "nvr.check_all", "schedule": 300.0},
         "tunnel-health": {"task": "tunnel.refresh_health", "schedule": 60.0},
+        "stream-sweep": {"task": "streams.sweep", "schedule": 30.0},
     },
 )

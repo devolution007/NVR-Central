@@ -94,6 +94,7 @@ export interface DashboardSummary {
   nvrs_by_status: Record<NvrStatus, number>
   cameras: number
   cameras_with_backup: number
+  active_streams: number
 }
 
 export type CameraStatus = 'unknown' | 'online' | 'offline' | 'unavailable'
@@ -131,6 +132,7 @@ export interface Camera {
   last_discovered_at: string | null
   main_stream: StreamProfile | null
   sub_stream: StreamProfile | null
+  is_favorite: boolean
 }
 
 export interface Capability {
@@ -192,4 +194,32 @@ export interface PeerCreated {
   script_name: string | null
   private_key_shown_once: boolean
   warnings: string[]
+}
+
+export type StreamKind = 'main' | 'sub'
+export type GridSize = 1 | 4 | 9 | 16 | 25
+
+export interface StreamSession {
+  id: string
+  camera_id: string
+  stream: StreamKind
+  /** Same-origin, authorised by the backend on every request. Never contains NVR credentials. */
+  hls_url: string
+  transcoded: boolean
+  expires_at: string
+  keepalive_every_seconds: number
+}
+
+export interface Layout {
+  id: string
+  name: string
+  grid_size: GridSize
+  camera_ids: string[]
+  updated_at: string
+}
+
+export interface LayoutInput {
+  name: string
+  grid_size: GridSize
+  camera_ids: string[]
 }

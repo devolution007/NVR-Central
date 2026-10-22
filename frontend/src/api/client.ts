@@ -20,7 +20,8 @@ export class ApiError extends Error {
   }
 }
 
-export const http = axios.create({ baseURL: '/api/v1', withCredentials: true })
+// `indexes: null` sends arrays as repeated keys (ids=a&ids=b), which is what FastAPI list parameters expect.
+export const http = axios.create({ baseURL: '/api/v1', withCredentials: true, paramsSerializer: { indexes: null } })
 
 const SAFE_METHODS = new Set(['get', 'head', 'options'])
 

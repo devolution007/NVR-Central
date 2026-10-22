@@ -1,4 +1,4 @@
-import { Building2, Camera, DatabaseBackup, Server } from 'lucide-react'
+import { Building2, Camera, DatabaseBackup, Server, Video } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { NvrStatus } from '@/api/types'
 import { errorMessage } from '@/api/client'
@@ -55,11 +55,12 @@ export function DashboardPage() {
         </EmptyState>
       ) : (
         <div className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <StatCard label="Campuses" value={data.campuses} icon={<Building2 className="size-4" />} />
             <StatCard label="NVRs" value={data.nvrs_total} icon={<Server className="size-4" />} hint={`${data.nvrs_by_status.connected} connected`} />
             <StatCard label="Cameras" value={data.cameras} icon={<Camera className="size-4" />} hint={data.cameras === 0 ? 'Discovered after NVR connection (Phase 2)' : undefined} />
             <StatCard label="Cameras with backup" value={data.cameras_with_backup} icon={<DatabaseBackup className="size-4" />} />
+            <StatCard label="Live streams now" value={data.active_streams} icon={<Video className="size-4" />} hint="People watching right now" />
           </div>
           <Card>
             <CardHeader>

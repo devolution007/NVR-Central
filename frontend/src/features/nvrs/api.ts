@@ -51,6 +51,8 @@ export interface CameraListParams {
   nvr_id?: string
   status?: CameraStatus
   q?: string
+  ids?: string[]
+  favorites?: boolean
   page?: number
   page_size?: number
 }

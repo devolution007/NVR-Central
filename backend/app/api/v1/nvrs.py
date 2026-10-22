@@ -19,6 +19,7 @@ from app.schemas.common import Page
 from app.schemas.nvr import NvrCreate, NvrOut, NvrUpdate
 from app.services import audit, nvr_ops
 from app.services.nvr_ops import Operation
+from app.streaming import manager as streaming
 from app.workers.dispatch import QueueUnavailableError, enqueue
 
 router = APIRouter(prefix="/nvrs", tags=["nvrs"])
@@ -297,6 +298,8 @@ def update_nvr(nvr_id: uuid.UUID, payload: NvrUpdate, request: Request, user: Ad
         },
     )
     db.commit()
+    if connection_changed or not nvr.enabled:
+        streaming.drop_nvr_paths(db, nvr.id)  # stale credentials must not linger in the live-view gateway
     return _out(db, nvr)
 
 
@@ -316,3 +319,4 @@ def delete_nvr(nvr_id: uuid.UUID, request: Request, user: AdminUser, db: DbSessi
         details={"name": nvr.name},
     )
     db.commit()
+    streaming.drop_nvr_paths(db, nvr.id)

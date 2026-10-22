@@ -43,6 +43,12 @@ os.environ["CELERY_TASK_ALWAYS_EAGER"] = "true"  # run tasks inline; tests never
 os.environ["ALLOW_LOOPBACK_NVR_HOSTS"] = "true"  # the simulated NVR listens on 127.0.0.1
 os.environ["WG_HUB_ENDPOINT"] = "vpn.test.example:51820"
 os.environ["WG_HUB_CONF_PATH"] = ""
+# A simulated MediaMTX answers both its API and HLS, so tests never touch the real gateway.
+from tests.support.fake_mediamtx import FakeMediaMtx  # noqa: E402
+
+FAKE_MEDIAMTX = FakeMediaMtx()
+os.environ["MEDIAMTX_API_URL"] = FAKE_MEDIAMTX.url
+os.environ["MEDIAMTX_HLS_URL"] = FAKE_MEDIAMTX.url
 # A throwaway hub key, so tests never depend on or expose the developer's real one.
 import base64 as _b64  # noqa: E402
 
@@ -182,3 +188,14 @@ def _block_real_devices() -> Iterator[None]:
 
     with override_adapter(guard):
         yield
+
+
+@pytest.fixture(autouse=True)
+def _reset_fake_mediamtx() -> Iterator[None]:
+    FAKE_MEDIAMTX.reset()
+    yield
+
+
+@pytest.fixture
+def mediamtx() -> FakeMediaMtx:
+    return FAKE_MEDIAMTX
