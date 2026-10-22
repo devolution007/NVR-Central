@@ -9,7 +9,7 @@ import { NvrActions } from './NvrActions'
 const nvr = (over: Partial<Nvr> = {}): Nvr => ({
   id: 'n1', campus_id: 'c1', campus_name: 'Head Office', name: 'Main NVR', connection_type: 'lan', host: '10.0.0.5',
   http_port: 80, rtsp_port: 554, username: 'admin', has_password: true, p2p_serial_masked: null, status: 'connected',
-  status_message: null, model: null, firmware: null, enabled: true, camera_count: 0, utc_offset_minutes: null,
+  status_message: null, model: null, firmware: null, enabled: true, max_live_streams: null, effective_max_live_streams: 8, camera_count: 0, utc_offset_minutes: null,
   last_checked_at: null, last_success_at: null, created_at: '', updated_at: '', ...over,
 })
 

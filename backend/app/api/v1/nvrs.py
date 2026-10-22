@@ -53,6 +53,8 @@ def _out(db: Session, nvr: Nvr) -> NvrOut:
         model=nvr.model,
         firmware=nvr.firmware,
         enabled=nvr.enabled,
+        max_live_streams=nvr.max_live_streams,
+        effective_max_live_streams=streaming.nvr_stream_limit(nvr),
         camera_count=cams,
         utc_offset_minutes=nvr.utc_offset_minutes,
         last_checked_at=nvr.last_checked_at,
@@ -206,6 +208,7 @@ def create_nvr(payload: NvrCreate, request: Request, user: AdminUser, db: DbSess
         password_encrypted=encrypt_secret(payload.password),
         p2p_serial_encrypted=encrypt_secret(payload.p2p_serial) if payload.p2p_serial else None,
         enabled=payload.enabled,
+        max_live_streams=payload.max_live_streams,
         status=NvrStatus.PENDING,
         status_changed_at=utcnow(),
     )
@@ -271,6 +274,7 @@ def update_nvr(nvr_id: uuid.UUID, payload: NvrUpdate, request: Request, user: Ad
     nvr.campus_id, nvr.name, nvr.connection_type = payload.campus_id, payload.name, payload.connection_type
     nvr.host, nvr.http_port, nvr.rtsp_port = payload.host, payload.http_port, payload.rtsp_port
     nvr.username, nvr.enabled = payload.username, payload.enabled
+    nvr.max_live_streams = payload.max_live_streams  # a limit change never needs a reconnect
     if payload.password is not None:
         nvr.password_encrypted = encrypt_secret(payload.password)
     if payload.p2p_serial is not None:

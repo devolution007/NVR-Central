@@ -160,6 +160,30 @@ def test_per_nvr_limit_counts_distinct_streams_and_frees_on_stop(admin_api: Api,
     assert start(admin_api, w.cams[3]).status_code == 201  # camera 1 freed a slot
 
 
+def test_an_nvrs_own_limit_overrides_the_server_default(admin_api: Api, db: Any) -> None:
+    w = make_world(db, cameras=11, campus_name="own limit")
+    for c in w.cams[:8]:
+        assert start(admin_api, c).status_code == 201
+    assert start(admin_api, w.cams[8]).status_code == 429  # server default of 8
+    r = admin_api.get(f"/api/v1/nvrs/{w.nvr.id}").json()
+    assert r["max_live_streams"] is None and r["effective_max_live_streams"] == 8
+
+    body = {
+        "campus_id": str(w.campus_id), "name": w.nvr.name, "connection_type": "lan", "host": "10.0.0.5",
+        "http_port": 80, "rtsp_port": 554, "username": "viewer user", "enabled": True, "max_live_streams": 10,
+    }  # fmt: skip
+    put = admin_api.put(f"/api/v1/nvrs/{w.nvr.id}", json=body)
+    assert put.status_code == 200 and put.json()["max_live_streams"] == 10 and put.json()["effective_max_live_streams"] == 10
+    assert put.json()["status"] == "connected"  # changing the limit does not reset the connection status
+    assert start(admin_api, w.cams[8]).status_code == 201 and start(admin_api, w.cams[9]).status_code == 201
+    blocked = start(admin_api, w.cams[10])
+    assert blocked.status_code == 429 and "10 live streams" in blocked.json()["error"]["message"]
+
+    assert admin_api.put(f"/api/v1/nvrs/{w.nvr.id}", json={**body, "max_live_streams": 0}).status_code == 422
+    cleared = admin_api.put(f"/api/v1/nvrs/{w.nvr.id}", json={**body, "max_live_streams": None}).json()
+    assert cleared["max_live_streams"] is None and cleared["effective_max_live_streams"] == 8
+
+
 def test_expired_sessions_stop_counting_toward_the_limit(admin_api: Api, db: Any, monkeypatch) -> None:
     w = make_world(db, cameras=3, campus_name="expiry")
     patched = get_settings().model_copy(update={"max_streams_per_nvr": 1})

@@ -45,6 +45,7 @@ function NvrForm({ nvr, campuses, defaultCampusId, onDone }: { nvr?: Nvr; campus
       password: '',
       p2p_serial: '',
       enabled: nvr?.enabled ?? true,
+      max_live_streams: nvr?.max_live_streams != null ? String(nvr.max_live_streams) : '',
     },
   })
   const type = watch('connection_type')
@@ -59,6 +60,7 @@ function NvrForm({ nvr, campuses, defaultCampusId, onDone }: { nvr?: Nvr; campus
       rtsp_port: v.rtsp_port,
       username: v.username,
       enabled: v.enabled,
+      max_live_streams: v.max_live_streams === '' ? null : Number(v.max_live_streams),
       ...(v.password ? { password: v.password } : {}),
       ...(v.connection_type === 'p2p' && v.p2p_serial ? { p2p_serial: v.p2p_serial } : {}),
     }
@@ -70,7 +72,7 @@ function NvrForm({ nvr, campuses, defaultCampusId, onDone }: { nvr?: Nvr; campus
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === 'nvr_name_taken') return setError('name', { message: err.message })
-        const known = new Set(['campus_id', 'name', 'host', 'http_port', 'rtsp_port', 'username', 'password', 'p2p_serial'])
+        const known = new Set(['campus_id', 'name', 'host', 'http_port', 'rtsp_port', 'username', 'password', 'p2p_serial', 'max_live_streams'])
         const mapped = err.details.filter((d) => known.has(d.field))
         if (mapped.length) {
           mapped.forEach((d) => setError(d.field as keyof NvrFormValues, { message: d.message }))
@@ -194,6 +196,24 @@ function NvrForm({ nvr, campuses, defaultCampusId, onDone }: { nvr?: Nvr; campus
       <p className="text-xs text-muted-foreground">
         Credentials are encrypted on the server and are never shown again or sent back to the browser.
       </p>
+
+      <div>
+        <Label htmlFor="nvr-max-streams">Max live streams</Label>
+        <Input
+          id="nvr-max-streams"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={64}
+          placeholder="Server default (8)"
+          aria-invalid={!!errors.max_live_streams}
+          {...register('max_live_streams')}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Most cameras the live wall may stream from this NVR at once. Leave blank for the server default. Raise it only as far as the NVR can handle; it also serves recording and DMSS.
+        </p>
+        <FieldError message={errors.max_live_streams?.message} />
+      </div>
 
       <Controller
         control={control}

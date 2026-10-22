@@ -69,6 +69,10 @@ export function NvrDetailPage() {
               <Fact label="Firmware">{n.firmware ?? '—'}</Fact>
               <Fact label="NVR timezone">{utcOffsetLabel(n.utc_offset_minutes)}</Fact>
               <Fact label="Cameras">{n.camera_count}</Fact>
+              <Fact label="Max live streams">
+                {n.effective_max_live_streams}
+                {n.max_live_streams == null && <span className="text-muted-foreground"> (default)</span>}
+              </Fact>
               <Fact label="Last checked">
                 <span title={formatDateTime(n.last_checked_at)}>{timeAgo(n.last_checked_at)}</span>
               </Fact>

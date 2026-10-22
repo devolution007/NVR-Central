@@ -11,6 +11,7 @@ const base = {
   password: 'secret',
   p2p_serial: '',
   enabled: true,
+  max_live_streams: '',
 }
 
 const issues = (r: ReturnType<ReturnType<typeof makeNvrSchema>['safeParse']>) =>
@@ -45,6 +46,12 @@ describe('NVR form schema', () => {
   it('requires a password to create but not to edit (blank keeps the stored one)', () => {
     expect(issues(makeNvrSchema('create').safeParse({ ...base, password: '' })).some((m) => m.startsWith('password'))).toBe(true)
     expect(makeNvrSchema('edit').safeParse({ ...base, password: '' }).success).toBe(true)
+  })
+
+  it('accepts a blank or whole-number stream limit from 1 to 64 and rejects the rest', () => {
+    const ok = (v: string) => makeNvrSchema('create').safeParse({ ...base, max_live_streams: v }).success
+    expect([ok(''), ok('16'), ok('1'), ok('64')]).toEqual([true, true, true, true])
+    expect([ok('0'), ok('65'), ok('2.5'), ok('abc')]).toEqual([false, false, false, false])
   })
 
   it('validates port ranges and NaN from empty number inputs', () => {

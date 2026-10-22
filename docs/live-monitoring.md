@@ -47,7 +47,8 @@ Not measured: converting the 1080p main stream (it is configured with two thread
 
 ## Limits
 
-- `MAX_STREAMS_PER_NVR` (default 8) counts distinct (camera, stream, delivery) upstream sessions. Viewers of the same
+- Each NVR can override the limit in its settings (NVR management → Edit → "Max live streams", 1 to 64; blank uses the default below).
+- `MAX_STREAMS_PER_NVR` (default 8, used when an NVR has no limit of its own) counts distinct (camera, stream, delivery) upstream sessions. Viewers of the same
   stream share one. 8 simultaneous streams through the gateway worked on the test NVR. 16 and 24 were **not** tested
   (someone was watching live at the time, so the NVR was not loaded further). Raise the limit only after testing.
 - Opening a camera fullscreen pauses the wall behind it, so the HD stream does not compete with the tiles.

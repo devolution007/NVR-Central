@@ -23,8 +23,15 @@ export function makeNvrSchema(mode: 'create' | 'edit') {
       password: z.string().max(128),
       p2p_serial: z.string().trim().max(64),
       enabled: z.boolean(),
+      // Blank means "use the server default".
+      max_live_streams: z.string().trim(),
     })
     .superRefine((v, ctx) => {
+      if (v.max_live_streams !== '') {
+        const n = Number(v.max_live_streams)
+        if (!Number.isInteger(n) || n < 1 || n > 64)
+          ctx.addIssue({ code: 'custom', path: ['max_live_streams'], message: 'Enter a whole number from 1 to 64, or leave blank for the default' })
+      }
       if (v.connection_type !== 'p2p') {
         if (!v.host) ctx.addIssue({ code: 'custom', path: ['host'], message: 'Address is required for tunnel and LAN connections' })
         else if (!HOST_RE.test(v.host))

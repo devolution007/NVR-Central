@@ -43,6 +43,8 @@ class Nvr(Base, IdMixin, TimestampMixin, SoftDeleteMixin):
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Most simultaneous live streams the server opens to this NVR. None = the server-wide MAX_STREAMS_PER_NVR default.
+    max_live_streams: Mapped[int | None] = mapped_column(Integer, default=None)
 
     __table_args__ = (
         Index(

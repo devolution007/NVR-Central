@@ -72,6 +72,11 @@ def _blocked_reason(nvr: Nvr, camera: Camera) -> str | None:
     return None
 
 
+def nvr_stream_limit(nvr: Nvr) -> int:
+    """This NVR's own limit if an admin set one, otherwise the server-wide default."""
+    return nvr.max_live_streams or get_settings().max_streams_per_nvr
+
+
 def live_info(db: Session, camera: Camera, nvr: Nvr, stream: StreamKind, client_hevc: bool = False) -> LiveInfo:
     s = get_settings()
     codec = _profile_codec(db, camera.id, stream)
@@ -81,7 +86,7 @@ def live_info(db: Session, camera: Camera, nvr: Nvr, stream: StreamKind, client_
         transcode=paths.needs_transcode(codec, s.stream_transcode, client_hevc),
         codec=codec,
         nvr_active_streams=active_sessions_for_nvr(db, nvr.id),
-        nvr_limit=s.max_streams_per_nvr,
+        nvr_limit=nvr_stream_limit(nvr),
     )
 
 
@@ -111,11 +116,13 @@ def create_session(
         )
     )
     if not already_live:  # joining a stream someone else is already watching costs the NVR nothing extra
-        if active_sessions_for_nvr(db, nvr.id) >= s.max_streams_per_nvr:
+        limit = nvr_stream_limit(nvr)
+        if active_sessions_for_nvr(db, nvr.id) >= limit:
             raise ApiError(
                 429, "nvr_stream_limit",
-                f"This NVR already has {s.max_streams_per_nvr} live streams, its configured limit. "
-                "Close one or raise MAX_STREAMS_PER_NVR after testing what the NVR can take.",
+                f"This NVR already has {limit} live streams, its configured limit. "
+                "Close one, or an admin can raise \"Max live streams\" in this NVR's settings "
+                "after testing what it can take.",
             )  # fmt: skip
         total = (
             db.scalar(

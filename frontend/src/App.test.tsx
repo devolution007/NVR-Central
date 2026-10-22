@@ -10,7 +10,7 @@ const admin = { id: 'u1', username: 'admin', display_name: 'Admin', email: null,
 const nvr: Nvr = {
   id: 'n1', campus_id: 'c1', campus_name: 'Head Office', name: 'Main NVR', connection_type: 'lan', host: '10.0.0.5', http_port: 80,
   rtsp_port: 554, username: 'admin', has_password: true, p2p_serial_masked: null, status: 'connected', status_message: null,
-  model: 'DHI-NVR', firmware: '1', enabled: true, camera_count: 2, utc_offset_minutes: 300, last_checked_at: null,
+  model: 'DHI-NVR', firmware: '1', enabled: true, max_live_streams: null, effective_max_live_streams: 8, camera_count: 2, utc_offset_minutes: 300, last_checked_at: null,
   last_success_at: null, created_at: '', updated_at: '',
 }
 

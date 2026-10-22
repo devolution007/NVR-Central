@@ -20,6 +20,8 @@ class NvrBase(BaseModel):
     rtsp_port: int = Field(default=554, ge=1, le=65535)
     username: str = Field(min_length=1, max_length=64)
     enabled: bool = True
+    # None = use the server default (MAX_STREAMS_PER_NVR).
+    max_live_streams: int | None = Field(default=None, ge=1, le=64)
 
     @field_validator("name")
     @classmethod
@@ -78,6 +80,8 @@ class NvrOut(BaseModel):
     model: str | None
     firmware: str | None
     enabled: bool
+    max_live_streams: int | None = None
+    effective_max_live_streams: int = 8
     camera_count: int = 0
     utc_offset_minutes: int | None = None
     last_checked_at: datetime | None = None

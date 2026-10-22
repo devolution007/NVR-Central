@@ -65,6 +65,9 @@ export interface Nvr {
   model: string | null
   firmware: string | null
   enabled: boolean
+  /** Per-NVR live stream limit; null means the server default. */
+  max_live_streams: number | null
+  effective_max_live_streams: number
   camera_count: number
   utc_offset_minutes: number | null
   last_checked_at: string | null
@@ -84,6 +87,7 @@ export interface NvrInput {
   password?: string
   p2p_serial?: string
   enabled: boolean
+  max_live_streams: number | null
   /** Queue a connection test and camera discovery right after saving (create only). */
   auto_connect?: boolean
 }
