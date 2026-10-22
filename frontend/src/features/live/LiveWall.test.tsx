@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { AxiosRequestConfig } from 'axios'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { http } from '@/api/client'
 import type { Camera, Layout } from '@/api/types'
@@ -50,9 +51,13 @@ describe('LiveWall', () => {
     cameras = Array.from({ length: 12 }, (_, i) => cam(i + 1))
     layouts = []
     getCalls.length = 0
-    vi.spyOn(http, 'get').mockImplementation(async (url: string, cfg?: { params?: Record<string, unknown> }) => {
-      getCalls.push({ url, params: cfg?.params })
-      if (url === '/cameras') return page(cameras)
+    vi.spyOn(http, 'get').mockImplementation(async (url: string, cfg?: AxiosRequestConfig) => {
+      const params = cfg?.params as Record<string, unknown> | undefined
+      getCalls.push({ url, params })
+      if (url === '/cameras') {
+        const ids = params?.ids as string[] | undefined // the real API filters by id, so the mock must too
+        return page(ids ? cameras.filter((c) => ids.includes(c.id)) : cameras)
+      }
       if (url === '/layouts') return { data: layouts }
       return page([])
     })
@@ -136,7 +141,7 @@ describe('LiveWall', () => {
   it('shows an error with a retry instead of a blank screen', async () => {
     vi.spyOn(http, 'get').mockImplementation(async (url: string) => {
       if (url === '/cameras') throw new Error('server exploded')
-      return { data: [] }
+      return url === '/layouts' ? { data: [] } : page([])
     })
     renderWall()
     expect(await screen.findByRole('alert')).toHaveTextContent('server exploded')

@@ -65,7 +65,8 @@ const session = (over: Partial<StreamSession> = {}): StreamSession => ({
 
 function mount(opts: { enabled?: boolean; cameraId?: string } = {}) {
   const video = document.createElement('video')
-  const hook = renderHook((p: { enabled: boolean; cameraId: string }) => useLiveStream({ cameraId: p.cameraId, stream: 'sub', enabled: p.enabled, videoRef: { current: video } }), {
+  const videoRef = { current: video } // one stable ref, like useRef in the real component (a new object per render re-runs the effect forever)
+  const hook = renderHook((p: { enabled: boolean; cameraId: string }) => useLiveStream({ cameraId: p.cameraId, stream: 'sub', enabled: p.enabled, videoRef }), {
     initialProps: { enabled: opts.enabled ?? true, cameraId: opts.cameraId ?? 'cam' },
   })
   return { video, ...hook }
@@ -76,8 +77,10 @@ const play = (video: HTMLVideoElement) => act(() => { video.dispatchEvent(new Ev
 
 describe('useLiveStream', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
+    // Only the timer functions: faking everything (setImmediate, microtasks) starves React's own scheduler.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
     instances.length = 0
+    n = 0 // session ids restart at s1 in every test
     resetStartGateForTests()
     startStream.mockReset().mockImplementation(async () => session())
     keepaliveStream.mockReset().mockResolvedValue()

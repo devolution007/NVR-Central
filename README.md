@@ -2,13 +2,15 @@
 
 Self-hosted web app for managing Dahua NVRs across multiple campuses: central live monitoring and SFTP backups.
 
-**Status:** Phase 2 built (NVR connection tests, camera discovery, campus tunnel management). Live video and backups are not built yet. See [docs/PHASES.md](docs/PHASES.md).
+**Status:** Phase 3 built (live monitoring on top of Phase 2's NVR checks, camera discovery and campus tunnels). SFTP backups are not built yet. See [docs/PHASES.md](docs/PHASES.md).
 
 | Area | Stack |
 |---|---|
 | Frontend | React 19, TypeScript, Vite, Tailwind 4, shadcn/ui, React Router, TanStack Query, Zustand, React Hook Form + Zod |
 | Backend | Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, Pydantic, PostgreSQL |
-| Later phases | Redis/Celery, MediaMTX, FFmpeg, WireGuard, SFTP |
+| Live view | MediaMTX (HLS), FFmpeg for H.265 to H.264 conversion when a browser needs it, hls.js |
+| Background | Redis, Celery |
+| Later phases | SFTP backups |
 
 ## Quick start (Windows)
 
@@ -50,7 +52,7 @@ docker compose --profile app up -d --build
 
 ### Ports
 
-PostgreSQL `127.0.0.1:15432`, Redis `127.0.0.1:16379`, API `8000`, UI `5173`. All bound to localhost. High database ports are deliberate: `5432` is often taken and Windows reserves random ports above 49152.
+PostgreSQL `127.0.0.1:15432`, Redis `127.0.0.1:16379`, MediaMTX API/HLS `127.0.0.1:9997` and `:8888` (never expose these), API `8000`, UI `5173`. All bound to localhost. High database ports are deliberate: `5432` is often taken and Windows reserves random ports above 49152.
 
 ## Tests and checks
 
@@ -87,4 +89,5 @@ scripts/    env generation, Windows setup
 - [docs/PHASES.md](docs/PHASES.md): phased plan and decisions
 - [docs/p2p-compatibility.md](docs/p2p-compatibility.md): why direct P2P is not the primary path
 - [docs/nvr-capabilities.md](docs/nvr-capabilities.md): measured behaviour of the test NVR over its LAN interfaces
+- [docs/live-monitoring.md](docs/live-monitoring.md): how live video works, measured CPU cost, limits, known gaps
 - [docs/architecture.md](docs/architecture.md): Phase 1 design notes and deviations from the spec

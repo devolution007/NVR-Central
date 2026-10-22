@@ -38,6 +38,7 @@ describe('App shell with real providers', () => {
       if (url === '/cameras') return { data: { items: [], total: 0, page: 1, page_size: 500 } }
       if (url === '/tunnel/hub') return { data: { configured: false, public_key: null, endpoint: null, network: '10.77.0.0/16', hub_address: '10.77.0.1', notes: [] } }
       if (url === '/tunnel/peers') return { data: [] }
+      if (url === '/layouts') return { data: [] }
       return { data: {} }
     })
   })
@@ -65,5 +66,19 @@ describe('App shell with real providers', () => {
     renderApp('/connectivity')
     expect(await screen.findByText('No campus tunnels yet')).toBeInTheDocument()
     expect(screen.getByText(/Not verified on hardware yet/)).toBeInTheDocument()
+  })
+
+  it('live pages load on demand and render their empty states', async () => {
+    const { unmount } = renderApp('/live')
+    expect(await screen.findByRole('heading', { name: 'Live Monitoring' })).toBeInTheDocument()
+    expect(await screen.findByText('No cameras to show')).toBeInTheDocument()
+    unmount()
+    const second = renderApp('/live/favorites')
+    expect(await screen.findByRole('heading', { name: 'Favorite Cameras' })).toBeInTheDocument()
+    expect(await screen.findByText('No favorite cameras yet')).toBeInTheDocument()
+    second.unmount()
+    renderApp('/live/layouts')
+    expect(await screen.findByRole('heading', { name: 'Saved Layouts' })).toBeInTheDocument()
+    expect(await screen.findByText('No saved layouts yet')).toBeInTheDocument()
   })
 })

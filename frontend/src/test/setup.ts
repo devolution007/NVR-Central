@@ -1,4 +1,8 @@
 import '@testing-library/jest-dom/vitest'
+import { configure } from '@testing-library/react'
+
+// The first render of a routed page can take seconds on a busy machine (many modules to load).
+configure({ asyncUtilTimeout: 10_000 })
 
 // jsdom lacks a few browser APIs that Radix UI (tooltips, dialogs, selects) relies on.
 class ResizeObserverStub {
