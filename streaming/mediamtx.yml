@@ -15,9 +15,12 @@ rtspTransports: [tcp]
 
 hls: true
 hlsAddress: :8888
-hlsVariant: fmp4
+# Low-latency HLS: the NVR sends a keyframe every ~2 s, so plain segments are 2 s long and players sit 3 of them
+# behind (6 s+). Parts let the player fetch each half second as soon as it exists.
+hlsVariant: lowLatency
 hlsSegmentCount: 7
 hlsSegmentDuration: 1s
+hlsPartDuration: 500ms
 hlsAlwaysRemux: false
 hlsMuxerCloseAfter: 10s
 hlsAllowOrigins: []

@@ -196,6 +196,19 @@ def _reset_fake_mediamtx() -> Iterator[None]:
     yield
 
 
+@pytest.fixture(autouse=True)
+def _fresh_hls_proxy_state(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """The HLS proxy keeps one HTTP client and a short-lived authorisation cache. Each test runs its own event loop and
+    expects access changes to apply at once, so neither may carry over (the cache is exercised by its own test)."""
+    from app.api.v1 import streams
+
+    streams._client = None
+    streams._hls_auth.clear()
+    monkeypatch.setattr(streams, "_HLS_AUTH_TTL", 0.0)
+    yield
+    streams._client = None
+
+
 @pytest.fixture
 def mediamtx() -> FakeMediaMtx:
     return FAKE_MEDIAMTX

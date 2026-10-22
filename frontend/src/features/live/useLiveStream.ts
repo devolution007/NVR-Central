@@ -153,7 +153,15 @@ export function useLiveStream({ cameraId, stream, enabled, videoRef }: Options) 
         }
         return
       }
-      hls = new HlsLib({ enableWorker: true, lowLatencyMode: false, liveSyncDurationCount: 3, maxBufferLength: 10, backBufferLength: 5 })
+      hls = new HlsLib({
+        enableWorker: true,
+        lowLatencyMode: true, // the gateway serves low-latency HLS (0.5 s parts)
+        maxBufferLength: 4,
+        backBufferLength: 5,
+        liveSyncDuration: 2.5, // stay ~2.5 s behind the edge: enough cushion to play smoothly, far less than 3 whole segments
+        liveMaxLatencyDuration: 8,
+        maxLiveSyncPlaybackRate: 1.5, // drift behind the live edge is caught up by playing slightly fast
+      })
       hls.on(HlsLib.Events.MANIFEST_PARSED, () => void video.play().catch(() => undefined))
       hls.on(HlsLib.Events.ERROR, (_e, data) => {
         if (!data.fatal) return
