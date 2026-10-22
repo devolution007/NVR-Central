@@ -1,3 +1,4 @@
+import asyncio
 import re
 import time
 import uuid
@@ -36,14 +37,17 @@ UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]
 
 
 _client: httpx.AsyncClient | None = None
+_client_loop: asyncio.AbstractEventLoop | None = None
 
 
 def _gateway_client() -> httpx.AsyncClient:
     """One shared client for all HLS requests. Building a client per request (it loads TLS certificates) cost more CPU
     than the proxying itself once low-latency HLS made it ~100 requests a second. Cookies are never kept, so viewers
     cannot share gateway state through it; each request carries its own `session` parameter."""
-    global _client
-    if _client is None:
+    global _client, _client_loop
+    loop = asyncio.get_running_loop()
+    if _client is None or _client_loop is not loop:  # the server has one loop; test clients start a new one per request
+        _client_loop = loop
         _client = httpx.AsyncClient(
             timeout=httpx.Timeout(20.0, connect=3.0),
             follow_redirects=True,

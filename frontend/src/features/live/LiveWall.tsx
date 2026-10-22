@@ -212,7 +212,7 @@ export function LiveWall({ source }: { source: WallSource }) {
         <>
           <div className={`grid gap-3 ${GRID_CLASS[grid]}`} data-testid="camera-wall">
             {visible.map((c) => (
-              <LiveCameraPlayer key={c.id} camera={c} paused={fullscreen !== null} onFullscreen={() => setFullscreen(c)} />
+              <LiveCameraPlayer key={c.id} camera={c} lowLatency={grid === 1} paused={fullscreen !== null} onFullscreen={() => setFullscreen(c)} />
             ))}
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">

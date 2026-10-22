@@ -56,6 +56,12 @@ interface Options {
   /** False while the tile is off screen or the tab is hidden: no session exists then. */
   enabled: boolean
   videoRef: RefObject<HTMLVideoElement | null>
+  /**
+   * Low-latency HLS keeps long requests open for every playing stream. Browsers allow only 6 connections per host over
+   * HTTP/1.1, so with more than one or two streams the players starve each other (and the rest of the app). Use it
+   * only when one or two cameras are on screen; a wall of tiles uses regular HLS with a tight live margin.
+   */
+  lowLatency?: boolean
 }
 
 const NO_RETRY: Record<string, 'limited' | 'unavailable'> = {
@@ -64,7 +70,7 @@ const NO_RETRY: Record<string, 'limited' | 'unavailable'> = {
   stream_not_available: 'unavailable',
 }
 
-export function useLiveStream({ cameraId, stream, enabled, videoRef }: Options) {
+export function useLiveStream({ cameraId, stream, enabled, videoRef, lowLatency = false }: Options) {
   const [state, setState] = useState<LiveState>({ phase: 'idle' })
   const [transcoded, setTranscoded] = useState<boolean | null>(null)
   const [nonce, setNonce] = useState(0)
@@ -155,11 +161,12 @@ export function useLiveStream({ cameraId, stream, enabled, videoRef }: Options) 
       }
       hls = new HlsLib({
         enableWorker: true,
-        lowLatencyMode: true, // the gateway serves low-latency HLS (0.5 s parts)
-        maxBufferLength: 4,
+        lowLatencyMode: lowLatency, // the gateway serves 0.5 s parts; see Options.lowLatency for when to use them
+        maxBufferLength: 6,
         backBufferLength: 5,
-        liveSyncDuration: 2.5, // stay ~2.5 s behind the edge: enough cushion to play smoothly, far less than 3 whole segments
-        liveMaxLatencyDuration: 8,
+        // Segments follow the NVR's 2 s keyframe interval. Stay 1.5 segments behind the edge instead of the default 3.
+        liveSyncDuration: lowLatency ? 2.5 : 3,
+        liveMaxLatencyDuration: lowLatency ? 8 : 9,
         maxLiveSyncPlaybackRate: 1.5, // drift behind the live edge is caught up by playing slightly fast
       })
       hls.on(HlsLib.Events.MANIFEST_PARSED, () => void video.play().catch(() => undefined))
@@ -230,7 +237,7 @@ export function useLiveStream({ cameraId, stream, enabled, videoRef }: Options) 
       video?.removeEventListener('canplay', onCanPlay)
       teardown()
     }
-  }, [cameraId, stream, enabled, nonce, videoRef])
+  }, [cameraId, stream, enabled, nonce, videoRef, lowLatency])
 
   return { state, transcoded, retry }
 }

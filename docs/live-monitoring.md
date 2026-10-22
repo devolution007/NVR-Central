@@ -82,3 +82,20 @@ Not measured: converting the 1080p main stream (it is configured with two thread
 - A reverse proxy in front of the backend must not buffer responses, or live video will lag. Not tested.
 - Behaviour over a real campus uplink or tunnel (bandwidth for N streams) is unmeasured.
 - A converted 1080p main stream and 16+ simultaneous NVR streams are unmeasured.
+
+## Latency and smoothness (tuned 2026-10-22)
+
+- The test NVR sends a keyframe every 2 s, so HLS segments are 2 s long. The first version kept the player 3 segments
+  behind the live edge (6 s or more) and ran the wall's playlists through a per-request database check.
+- MediaMTX now serves low-latency HLS (`hlsVariant: lowLatency`, 0.5 s parts). The player (hls.js) uses it only for a
+  single camera on screen (grid 1) and the fullscreen view. Low-latency playback keeps long requests open per
+  stream, and browsers allow 6 connections per host over HTTP/1.1, so with more than 1 or 2 streams the players starve
+  each other (measured: 9 tiles made even `/auth/me` take 1 s and 3 tiles never started). Wall tiles use regular HLS
+  with a 3 s live margin instead.
+- The HLS proxy shares one HTTP client, releases its database connection before proxying, and caches a positive
+  access check for 3 s per (user, session). The access token is still verified on every request. A disabled user or
+  ended session loses access within 3 s.
+- Lower delay on the wall needs a shorter NVR keyframe interval (the sub stream's "I Frame Interval" in the NVR's
+  encode settings: set it equal to the frame rate for 1 s segments). The app does not change NVR settings.
+- Behind a reverse proxy with HTTP/2 the 6-connection limit does not apply, and low-latency mode could be enabled for
+  more tiles. That has not been tested.

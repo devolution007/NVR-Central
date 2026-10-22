@@ -17,11 +17,13 @@ interface Props {
   paused?: boolean
   /** Larger text and no favorite control, for the fullscreen dialog. */
   large?: boolean
+  /** Sub-second HLS parts. Defaults to on for the fullscreen player only (see useLiveStream). */
+  lowLatency?: boolean
   className?: string
 }
 
 /** One camera tile. Always 16:9, and always honest: the overlay says what the stream is really doing. */
-export function LiveCameraPlayer({ camera, stream = 'sub', onFullscreen, paused = false, large = false, className }: Props) {
+export function LiveCameraPlayer({ camera, stream = 'sub', onFullscreen, paused = false, large = false, lowLatency, className }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const video = useRef<HTMLVideoElement>(null)
   const watchable = useWatchable(box)
@@ -31,7 +33,13 @@ export function LiveCameraPlayer({ camera, stream = 'sub', onFullscreen, paused 
   // A camera the NVR already reported as not responding is not streamed automatically: every attempt is a wasted
   // connection to the NVR. The user can still try it.
   const blocked = camera.status === 'unavailable' || (camera.status === 'offline' && !tryAnyway)
-  const { state, transcoded, retry } = useLiveStream({ cameraId: camera.id, stream, enabled: watchable && !blocked && !paused, videoRef: video })
+  const { state, transcoded, retry } = useLiveStream({
+    cameraId: camera.id,
+    stream,
+    enabled: watchable && !blocked && !paused,
+    videoRef: video,
+    lowLatency: lowLatency ?? large,
+  })
 
   const live = state.phase === 'live'
   const busy = state.phase === 'connecting' || state.phase === 'reconnecting'
