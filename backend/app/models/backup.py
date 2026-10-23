@@ -105,7 +105,5 @@ class BackupFile(Base, IdMixin, TimestampMixin):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     __table_args__ = (
-        Index(
-            "uq_backup_files_dedup", "camera_id", "destination_id", "stream", "recording_start", unique=True
-        ),
+        Index("uq_backup_files_dedup", "camera_id", "destination_id", "stream", "recording_start", unique=True),
     )

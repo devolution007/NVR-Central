@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     # auto: convert to H.264 unless the camera already sends H.264. always / never override.
     stream_transcode: str = "auto"
 
+    # Backups. Recordings are streamed to this folder, uploaded, then deleted. Put it on a disk with room for one
+    # recording per running job (main stream: about 1 GB per camera-hour).
+    backup_staging_dir: str = "../data/backup-staging"
+    backup_min_free_gb: float = 5.0  # a download is refused if it would leave less than this free
+    backup_overlap_minutes: int = 10  # each run starts this long before the checkpoint; dedup makes the overlap free
+    backup_inprogress_margin_seconds: int = 120  # a recording that ended more recently than this may still be written
+    backup_max_attempts: int = 5  # per recording file, across runs, before it is left failed for a manual retry
+    backup_job_stale_seconds: int = 300  # a running job with no heartbeat for this long is recovered
+
     # WireGuard hub (campus connectivity). All optional: without a hub key the Connectivity page says so.
     wg_hub_private_key: str = ""
     wg_hub_endpoint: str = ""

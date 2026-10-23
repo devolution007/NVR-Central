@@ -72,7 +72,9 @@ def _open_transport(host: str, port: int, timeout: float) -> paramiko.Transport:
         transport.start_client(timeout=timeout)
     except (paramiko.SSHException, EOFError, OSError) as exc:
         transport.close()
-        raise SftpUnreachableError(f"{host}:{port} did not complete an SSH handshake. Is it an SFTP/SSH server?") from exc
+        raise SftpUnreachableError(
+            f"{host}:{port} did not complete an SSH handshake. Is it an SFTP/SSH server?"
+        ) from exc
     return transport
 
 
