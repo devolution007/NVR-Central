@@ -57,6 +57,36 @@ class StreamKind(StrEnum):
     SUB = "sub"
 
 
+class SftpAuthType(StrEnum):
+    PASSWORD = "password"
+    KEY = "key"
+
+
+class BackupTrigger(StrEnum):
+    SCHEDULED = "scheduled"
+    MANUAL = "manual"
+
+
+class BackupJobStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCESS = "success"  # every recording in the window is safely on the SFTP server
+    PARTIAL = "partial"  # some files are backed up, some failed or were skipped
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class BackupFileStatus(StrEnum):
+    PENDING = "pending"
+    DOWNLOADING = "downloading"
+    UPLOADING = "uploading"
+    VERIFYING = "verifying"
+    DONE = "done"
+    FAILED = "failed"
+    SKIPPED = "skipped"  # still being recorded, or not a recording type this policy wants
+    CANCELLED = "cancelled"
+
+
 class StreamSessionStatus(StrEnum):
     ACTIVE = "active"
     ENDED = "ended"  # the viewer closed it

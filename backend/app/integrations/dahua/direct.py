@@ -2,7 +2,9 @@
 
 import contextlib
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from urllib.parse import quote
 
 from app.integrations.base import (
@@ -14,10 +16,12 @@ from app.integrations.base import (
     NvrAdapter,
     NvrAuthError,
     NvrProtocolError,
+    NvrUnreachableError,
     NvrUnsupportedError,
+    RecordingFile,
     StreamProfile,
 )
-from app.integrations.dahua.cgi import DahuaHttp, group_indexed
+from app.integrations.dahua.cgi import DahuaHttp, group_indexed, parse_kv
 from app.integrations.dahua.rtsp import rtsp_describe
 from app.integrations.dahua.timezones import DAHUA_TZ_OFFSET_MINUTES, VERIFIED_CODES, offset_from_clock
 from app.models.enums import CapabilityName, CapabilityStatus, StreamKind
@@ -53,6 +57,29 @@ def parse_profile(enc: dict[str, str], index: int, fmt: str, stream: StreamKind)
         height=height,
         bitrate_kbps=_int(enc.get(base + "BitRate")),
         fps=_int(enc.get(base + "FPS")),
+    )
+
+
+def _parse_recording(item: dict[str, str], channel_number: int) -> RecordingFile | None:
+    """One `items[n]` block of a mediaFileFind result. Anything unreadable is dropped rather than guessed."""
+    try:
+        start = datetime.strptime(item["StartTime"], DAHUA_TIME)
+        end = datetime.strptime(item["EndTime"], DAHUA_TIME)
+    except (KeyError, ValueError):
+        return None
+    path = item.get("FilePath", "")
+    if not path or end <= start:
+        return None
+    # Observed on the test NVR: "Main" for the main stream and "Extra1" for the substream.
+    stream = StreamKind.MAIN if item.get("VideoStream", "").lower() == "main" else StreamKind.SUB
+    return RecordingFile(
+        channel_number=channel_number,
+        stream=stream,
+        start=start,
+        end=end,
+        path=path,
+        size_bytes=_int(item.get("Length")),
+        kind=item.get("Flags[0]") or item.get("Type", ""),
     )
 
 
@@ -235,6 +262,52 @@ class DahuaDirectAdapter(NvrAdapter):
                 )
             )
         return out
+
+    # -- recordings -----------------------------------------------------------------------------------------
+    def search_recordings(self, channel_number: int, start: datetime, end: datetime) -> list[RecordingFile]:
+        created = self.http.get("/cgi-bin/mediaFileFind.cgi?action=factory.create")
+        if created.status_code == 404:
+            raise NvrUnsupportedError("This NVR has no recording search (mediaFileFind)")
+        if created.status_code != 200 or "result=" not in created.text:
+            raise NvrProtocolError(f"The NVR could not open a recording search (HTTP {created.status_code})")
+        obj = created.text.split("result=", 1)[1].strip().split()[0]
+        found: list[RecordingFile] = []
+        try:
+            r = self.http.get(
+                f"/cgi-bin/mediaFileFind.cgi?action=findFile&object={obj}&condition.Channel={channel_number}"
+                f"&condition.StartTime={quote(start.strftime(DAHUA_TIME))}"
+                f"&condition.EndTime={quote(end.strftime(DAHUA_TIME))}&condition.Types[0]=dav"
+            )
+            if r.status_code != 200:
+                raise NvrProtocolError(f"The NVR refused the recording search (HTTP {r.status_code})")
+            while True:
+                page = self.http.get(f"/cgi-bin/mediaFileFind.cgi?action=findNextFile&object={obj}&count=100")
+                if page.status_code != 200:
+                    break
+                items = group_indexed(parse_kv(page.text), "items")
+                for idx in sorted(items):
+                    rec = _parse_recording(items[idx], channel_number)
+                    if rec is not None:
+                        found.append(rec)
+                if len(items) < 100:
+                    break
+        finally:
+            for action in ("close", "destroy"):
+                with contextlib.suppress(NvrProtocolError, NvrAuthError, NvrUnreachableError, OSError):
+                    self.http.get(f"/cgi-bin/mediaFileFind.cgi?action={action}&object={obj}")
+        found.sort(key=lambda f: (f.start, f.stream.value))
+        return found
+
+    def download_recording(
+        self,
+        recording: RecordingFile,
+        destination: Path,
+        progress: Callable[[int], None] | None = None,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> int:
+        if not recording.path.startswith("/"):
+            raise NvrProtocolError("The recording has no usable path on the NVR")
+        return self.http.download("/cgi-bin/RPC_Loadfile" + recording.path, destination, progress, cancelled)
 
     def _probe_search(self, channel: int) -> CapabilityResult:
         T, U, K = CapabilityStatus.SUPPORTED_TESTED, CapabilityStatus.UNSUPPORTED, CapabilityStatus.UNKNOWN

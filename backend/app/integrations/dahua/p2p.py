@@ -15,6 +15,7 @@ from app.integrations.base import (
     DeviceInfo,
     NvrAdapter,
     NvrUnsupportedError,
+    RecordingFile,
 )
 
 P2P_DISABLED = (
@@ -45,5 +46,5 @@ class DahuaP2pAdapter(NvrAdapter):
     def get_camera_status(self, channel_number: int) -> CameraProbe:
         raise NvrUnsupportedError(P2P_DISABLED)
 
-    def search_recordings(self, channel_number: int, start: datetime, end: datetime) -> list[object]:
+    def search_recordings(self, channel_number: int, start: datetime, end: datetime) -> list[RecordingFile]:
         raise NvrUnsupportedError(P2P_DISABLED)

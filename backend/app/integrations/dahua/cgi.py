@@ -2,11 +2,19 @@
 firmware 4.005.0000000.7.R, on 2026-10-21 (see docs/nvr-capabilities.md). Other models are untested."""
 
 import re
+from collections.abc import Callable
+from pathlib import Path
 from types import TracebackType
 
 import httpx
 
-from app.integrations.base import ConnectionParams, NvrAuthError, NvrProtocolError, NvrUnreachableError
+from app.integrations.base import (
+    CancelledDownload,
+    ConnectionParams,
+    NvrAuthError,
+    NvrProtocolError,
+    NvrUnreachableError,
+)
 
 
 def parse_kv(text: str) -> dict[str, str]:
@@ -72,6 +80,41 @@ class DahuaHttp:
                 "wait for the lock to expire or unlock it on the NVR. Do not retry meanwhile."
             )
         return resp
+
+    def download(
+        self,
+        path: str,
+        dest: Path,
+        progress: Callable[[int], None] | None = None,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> int:
+        """Stream a GET response to a file in 256 KiB chunks (a recording can be a gigabyte). The partial file is
+        removed on any failure, so an incomplete download is never mistaken for a finished one."""
+        written = 0
+        try:
+            with self._client.stream("GET", self._base + path, timeout=httpx.Timeout(30.0, connect=5.0)) as resp:
+                if resp.status_code in (401, 403):
+                    raise NvrAuthError("The NVR refused the download (credentials rejected or account locked).")
+                if resp.status_code != 200:
+                    raise NvrProtocolError(f"The NVR answered the download with HTTP {resp.status_code}")
+                with dest.open("wb") as fh:
+                    for chunk in resp.iter_bytes(262144):
+                        if cancelled is not None and cancelled():
+                            raise CancelledDownload()
+                        fh.write(chunk)
+                        written += len(chunk)
+                        if progress is not None:
+                            progress(written)
+        except httpx.TimeoutException as exc:
+            dest.unlink(missing_ok=True)
+            raise NvrUnreachableError("The NVR stopped sending data during the download.") from exc
+        except httpx.HTTPError as exc:
+            dest.unlink(missing_ok=True)
+            raise NvrUnreachableError(f"Network error during the download ({type(exc).__name__}).") from exc
+        except BaseException:
+            dest.unlink(missing_ok=True)
+            raise
+        return written
 
     def get_kv(self, path: str) -> dict[str, str]:
         resp = self.get(path)

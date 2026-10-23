@@ -62,3 +62,12 @@ class CameraBackupPolicy(Base, IdMixin, TimestampMixin):
     backup_stream: Mapped[BackupStream] = mapped_column(_enum(BackupStream), default=BackupStream.SUB)
     frequency_minutes: Mapped[int] = mapped_column(Integer, default=60)
     recording_mode: Mapped[RecordingMode] = mapped_column(_enum(RecordingMode), default=RecordingMode.ALL)
+    destination_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sftp_destinations.id"), default=None
+    )
+    # Everything recorded before this instant (UTC) is already safely backed up. The next run starts a little earlier
+    # (overlap) so a recording that was still being written last time is picked up now.
+    checkpoint_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)

@@ -5,8 +5,10 @@ Unsupported or untested operations raise NvrUnsupportedError instead of returnin
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from types import TracebackType
 
 from app.models.enums import CapabilityName, CapabilityStatus, StreamKind
@@ -81,6 +83,23 @@ class CameraProbe:
 
 
 @dataclass(frozen=True)
+class RecordingFile:
+    """One recording file on the NVR. `start` and `end` are NVR local wall-clock time (naive)."""
+
+    channel_number: int  # 1-based
+    stream: StreamKind
+    start: datetime
+    end: datetime
+    path: str  # the NVR's own path, only meaningful to the adapter that returned it
+    size_bytes: int | None = None
+    kind: str = ""  # NVR file type / flags, for display
+
+
+class CancelledDownload(Exception):
+    """The caller asked to stop a download part-way."""
+
+
+@dataclass(frozen=True)
 class CapabilityResult:
     name: CapabilityName
     status: CapabilityStatus
@@ -121,12 +140,22 @@ class NvrAdapter(ABC):
     def get_camera_status(self, channel_number: int) -> CameraProbe:
         """Cheap liveness probe for one channel (does not pull media)."""
 
-    # Phase 3 / Phase 4 operations. Adapters that cannot do them yet raise NvrUnsupportedError.
-    def search_recordings(self, channel_number: int, start: datetime, end: datetime) -> list[object]:
-        raise NvrUnsupportedError("Recording search is not implemented in this phase")
+    # Adapters that cannot do these raise NvrUnsupportedError.
+    def search_recordings(self, channel_number: int, start: datetime, end: datetime) -> list[RecordingFile]:
+        """Recording files overlapping [start, end]. Both bounds and the returned times are the NVR's local wall
+        clock (naive); the caller converts with the NVR's measured UTC offset."""
+        raise NvrUnsupportedError("Recording search is not supported by this adapter")
 
-    def download_recording(self, recording_id: str, destination: str) -> str:
-        raise NvrUnsupportedError("Recording download is not implemented in this phase")
+    def download_recording(
+        self,
+        recording: RecordingFile,
+        destination: Path,
+        progress: Callable[[int], None] | None = None,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> int:
+        """Stream one recording to `destination` (never fully in memory) and return the bytes written. `progress`
+        gets the running byte count; `cancelled` is polled between chunks and aborts with CancelledDownload."""
+        raise NvrUnsupportedError("Recording download is not supported by this adapter")
 
     def open_live_stream(self, channel_number: int, stream: StreamKind) -> str:
         raise NvrUnsupportedError("Live streaming is not implemented in this phase")
