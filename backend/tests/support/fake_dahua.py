@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 REALM, NONCE = "Login to SIMULATED", "sim-nonce-123"
 
@@ -22,6 +22,22 @@ class SimCamera:
     address: str = "192.168.15.10"
     enable: bool = True
     rtsp_ok: bool = True
+
+
+@dataclass
+class SimRecording:
+    channel: int  # 1-based
+    stream: str  # "Main" or "Extra1", as the real NVR labels them
+    start: datetime  # NVR local wall clock
+    end: datetime
+    data: bytes = b""
+    reported_length: int | None = None  # what the NVR claims; defaults to len(data)
+
+    @property
+    def path(self) -> str:
+        s = self.start.strftime("%H.%M.%S")
+        e = self.end.strftime("%H.%M.%S")
+        return f"/mnt/dvr/{self.start:%Y-%m-%d}/{0 if self.stream == 'Main' else 128}/dav/{self.start:%H}/0/0/1/{s}-{e}[R][0@0][0].dav"
 
 
 @dataclass
@@ -41,6 +57,12 @@ class SimNvr:
     locked: bool = False  # real NVRs answer 403 while the account is locked
     delay_seconds: float = 0.0
     requests: list[str] = field(default_factory=list)
+    recordings: list[SimRecording] = field(default_factory=list)
+    download_cut_after: int | None = None  # drop the connection after this many body bytes, once
+    download_status: int = 200
+    search_status: int = 200
+    _cursor: int = 0
+    _criteria: tuple[int, datetime, datetime] | None = None
 
 
 def _digest_ok(method: str, auth: str | None, nvr: SimNvr) -> bool:
@@ -87,6 +109,8 @@ def _make_handler(nvr: SimNvr) -> type[BaseHTTPRequestHandler]:
                 self.end_headers()
                 return
             u = urlparse(self.path)
+            if u.path.startswith("/cgi-bin/RPC_Loadfile/"):
+                return self._loadfile(unquote(u.path[len("/cgi-bin/RPC_Loadfile") :]))
             q = parse_qs(u.query)
             act = q.get("action", [""])[0]
             name = q.get("name", [""])[0]
@@ -151,9 +175,51 @@ def _make_handler(nvr: SimNvr) -> type[BaseHTTPRequestHandler]:
                 if act == "factory.create":
                     return self._send(200, b"result=77\r\n")
                 if act == "findFile":
+                    if nvr.search_status != 200:
+                        return self._send(nvr.search_status)
+                    nvr._cursor = 0
+                    nvr._criteria = (
+                        int(q["condition.Channel"][0]),
+                        datetime.strptime(q["condition.StartTime"][0], "%Y-%m-%d %H:%M:%S"),
+                        datetime.strptime(q["condition.EndTime"][0], "%Y-%m-%d %H:%M:%S"),
+                    )
                     return self._send(200, b"OK\r\n")
+                if act == "findNextFile" and nvr._criteria:
+                    ch, lo, hi = nvr._criteria
+                    hits = [r for r in nvr.recordings if r.channel == ch and r.start < hi and r.end > lo]
+                    batch = hits[nvr._cursor : nvr._cursor + int(q.get("count", ["100"])[0])]
+                    nvr._cursor += len(batch)
+                    rows = f"found={len(batch)}\r\n"
+                    for i, r in enumerate(batch):
+                        rows += (
+                            f"items[{i}].Channel={ch - 1}\r\nitems[{i}].StartTime={r.start:%Y-%m-%d %H:%M:%S}\r\n"
+                            f"items[{i}].EndTime={r.end:%Y-%m-%d %H:%M:%S}\r\nitems[{i}].FilePath={r.path}\r\n"
+                            f"items[{i}].Length={r.reported_length if r.reported_length is not None else len(r.data)}\r\n"
+                            f"items[{i}].VideoStream={r.stream}\r\nitems[{i}].Type=dav\r\nitems[{i}].Flags[0]=Timing\r\n"
+                        )
+                    return self._send(200, rows.encode())
                 return self._send(200, b"OK\r\n")
             return self._send(404)
+
+        def _loadfile(self, path: str) -> None:
+            if nvr.download_status != 200:
+                return self._send(nvr.download_status)
+            rec = next((r for r in nvr.recordings if r.path == path), None)
+            if rec is None:
+                return self._send(404)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(rec.data)))
+            self.end_headers()
+            cut = nvr.download_cut_after
+            if cut is not None:
+                nvr.download_cut_after = None
+                self.wfile.write(rec.data[:cut])
+                self.wfile.flush()
+                self.close_connection = True
+                self.connection.close()  # the NVR dies mid-file
+                return
+            self.wfile.write(rec.data)
 
     return Handler
 
