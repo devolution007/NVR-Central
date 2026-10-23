@@ -4,6 +4,7 @@ Start the dev database first:  docker compose up -d db
 """
 
 import os
+import tempfile
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -41,6 +42,8 @@ os.environ["LOGIN_MAX_FAILURES"] = "5"
 os.environ["LOGIN_IP_LIMIT_PER_MINUTE"] = "20"
 os.environ["CELERY_TASK_ALWAYS_EAGER"] = "true"  # run tasks inline; tests never need a worker process
 os.environ["ALLOW_LOOPBACK_NVR_HOSTS"] = "true"  # the simulated NVR listens on 127.0.0.1
+os.environ["BACKUP_STAGING_DIR"] = str(Path(tempfile.gettempdir()) / "nvr-central-test-staging")
+os.environ["BACKUP_MIN_FREE_GB"] = "0"
 os.environ["WG_HUB_ENDPOINT"] = "vpn.test.example:51820"
 os.environ["WG_HUB_CONF_PATH"] = ""
 # A simulated MediaMTX answers both its API and HLS, so tests never touch the real gateway.

@@ -57,3 +57,41 @@ def sweep_streams() -> int:
 
     with get_sessionmaker()() as db:
         return manager.sweep_expired(db)
+
+
+# Backup jobs can run for hours, so they have their own queue (start a second worker with `-Q backups`) and are not
+# subject to the default 5 minute task limit. Otherwise a long download would block the NVR checks queued behind it.
+BACKUP_TIME_LIMIT = 6 * 3600
+
+
+@celery_app.task(name="backup.run_job", time_limit=BACKUP_TIME_LIMIT, soft_time_limit=BACKUP_TIME_LIMIT - 60)
+def run_backup_job(job_id: str) -> str | None:
+    from app.services import backup
+
+    with get_sessionmaker()() as db:
+        status = backup.run_job(db, uuid.UUID(job_id))
+    return status.value if status else None
+
+
+@celery_app.task(name="backup.schedule")
+def schedule_backups() -> int:
+    """Create a job for every backup policy that is due and queue it."""
+    from app.services import backup
+
+    with get_sessionmaker()() as db:
+        ids = backup.schedule_due(db)
+    for job_id in ids:
+        run_backup_job.delay(str(job_id))
+    return len(ids)
+
+
+@celery_app.task(name="backup.sweep")
+def sweep_backups() -> int:
+    """Recover jobs whose worker died and re-queue jobs whose message was lost or is waiting for a busy NVR."""
+    from app.services import backup
+
+    with get_sessionmaker()() as db:
+        ids = backup.recover_stale(db)
+    for job_id in ids:
+        run_backup_job.delay(str(job_id))
+    return len(ids)

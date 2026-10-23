@@ -190,7 +190,8 @@ class SftpSession:
 
     def size(self, path: str) -> int | None:
         try:
-            return self.sftp.stat(path).st_size
+            size = self.sftp.stat(path).st_size
+            return int(size) if size is not None else None
         except FileNotFoundError:
             return None
 
