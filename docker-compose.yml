@@ -72,7 +72,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # Background worker: connection tests, camera discovery (and, from Phase 4, backups).
+  # Background worker: connection tests, camera discovery and tunnel health (default queue).
   worker:
     profiles: ["app"]
     build: ./backend
@@ -88,7 +88,28 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 -Q celery
+
+  # Backup worker: its own queue, so a download that runs for hours never delays NVR checks. Recordings are staged
+  # in /staging before upload (point BACKUP_STAGING_DIR there; the volume must have room for one recording per job).
+  backup-worker:
+    profiles: ["app"]
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-nvr_central}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-nvr_central}
+      REDIS_URL: redis://redis:6379/0
+      BACKUP_STAGING_DIR: /staging
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - backup_staging:/staging
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2 -Q backups
 
   # Scheduler: periodic NVR health checks and tunnel health collection.
   beat:
@@ -125,4 +146,5 @@ services:
 volumes:
   pgdata:
   redisdata:
+  backup_staging:
   frontend_node_modules:

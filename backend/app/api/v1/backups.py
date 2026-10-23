@@ -36,6 +36,7 @@ from app.models.user import User
 from app.schemas.backup import (
     BackupStatusOut,
     DestinationCreate,
+    DestinationOption,
     DestinationOut,
     DestinationUpdate,
     FileOut,
@@ -107,6 +108,14 @@ def list_destinations(_: AdminUser, db: DbSession) -> list[DestinationOut]:
         select(SftpDestination).where(SftpDestination.deleted_at.is_(None)).order_by(SftpDestination.name)
     )
     return [_dest_out(db, d) for d in rows]
+
+
+@router.get("/destinations/options", response_model=list[DestinationOption])
+def destination_options(_: OperatorUser, db: DbSession) -> list[DestinationOption]:
+    rows = db.scalars(
+        select(SftpDestination).where(SftpDestination.deleted_at.is_(None)).order_by(SftpDestination.name)
+    )
+    return [DestinationOption(id=d.id, name=d.name, enabled=d.enabled) for d in rows]
 
 
 @router.post("/destinations/host-key", response_model=HostKeyOut)

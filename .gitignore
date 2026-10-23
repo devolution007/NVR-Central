@@ -10,3 +10,4 @@ p2p-bridge/downloads/
 
 # local dev admin credentials (generated)
 .dev-admin.txt
+data/

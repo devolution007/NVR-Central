@@ -104,7 +104,7 @@ Costs and risks to be honest about:
 
 **Result (honest status):** live viewing works end to end on the real NVR over the LAN (8 simultaneous tiles, fullscreen main stream 1920x1080, favorites, layouts). Details, measurements and gaps are in `docs/live-monitoring.md`. **Not** proven: streaming through a tunnel, 16+ simultaneous NVR streams, converted main stream CPU, WebRTC (HLS only), audio.
 
-## Phase 4 — SFTP Backups
+## Phase 4 — SFTP Backups  (BUILT 2026-10-23, real-NVR download blocked, awaiting your decision)
 - SFTP destinations: encrypted creds, host-key verification, test connection and write test.
 - Recording search and download via the direct adapter, **streamed to disk** (never fully in RAM).
 - Recordings page: search by campus / NVR / camera / time, manual backup, progress.
@@ -115,6 +115,8 @@ Costs and risks to be honest about:
 - **Connector mode B (backup agent)** as the last item, only if tunnel bandwidth or reliability from 0b/3 shows it is needed.
 
 **Gate:** scheduled and manual backups land on a real SFTP server and survive worker restart and tunnel/network interruption.
+
+**Result (honest status):** destinations (pinned host keys, test with write check), recording search, manual and scheduled backups, the engine (dedup, checkpoints, in-progress skip, crash recovery, retries with back-off, cancel, disk guard, sidecar hashes), policies with bulk edit, Recording Browser, Backup Jobs and History pages are built. Backend 263 tests and frontend tests pass against a SIMULATED NVR and SIMULATED SFTP server. **On the real NVR a full-file HTTP download fails: the NVR closes the connection part-way (at a file-specific point, no `Range` support).** Search works. The engine reports this honestly and uploads nothing partial. No real SFTP server has been used. Details and options in `docs/backups.md`. Not built: SSE (polling instead), connector mode B, retention.
 
 ## Phase 5 — Administration & Production
 - Users & permissions UI, audit log viewer.

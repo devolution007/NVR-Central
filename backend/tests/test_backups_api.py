@@ -73,6 +73,8 @@ def test_destination_in_use_cannot_be_deleted_and_only_admins_manage_them(admin_
     op = Api()
     op.login("op")
     assert op.get(f"{B}/destinations").status_code == 403
+    options = op.get(f"{B}/destinations/options").json()  # names only, no connection details
+    assert options == [{"id": str(env.dest.id), "name": "Archive", "enabled": True}]
     assert op.post(f"{B}/destinations", json=dest_body(env)).status_code == 403
 
 
@@ -85,7 +87,9 @@ def test_policy_list_shows_unconfigured_cameras_with_defaults(admin_api: Api, en
     assert rows[0]["backup_stream"] == "sub" and rows[0]["frequency_minutes"] == 60
 
 
-def test_enabling_a_policy_needs_a_destination_and_starts_from_now_by_default(admin_api: Api, env: Env, db: Any) -> None:
+def test_enabling_a_policy_needs_a_destination_and_starts_from_now_by_default(
+    admin_api: Api, env: Env, db: Any
+) -> None:
     db.execute(CameraBackupPolicy.__table__.delete())
     db.commit()
     cam = str(env.camera.id)
@@ -103,7 +107,10 @@ def test_enabling_a_policy_needs_a_destination_and_starts_from_now_by_default(ad
 def test_backfill_hours_set_how_far_back_the_first_run_looks(admin_api: Api, env: Env, db: Any) -> None:
     db.execute(CameraBackupPolicy.__table__.delete())
     db.commit()
-    r = admin_api.put(f"{B}/policies/{env.camera.id}", json={"enabled": True, "destination_id": str(env.dest.id), "backfill_hours": 24})
+    r = admin_api.put(
+        f"{B}/policies/{env.camera.id}",
+        json={"enabled": True, "destination_id": str(env.dest.id), "backfill_hours": 24},
+    )
     from datetime import datetime
 
     gap = utcnow() - datetime.fromisoformat(r.json()["checkpoint_at"])
@@ -197,7 +204,9 @@ def test_manual_job_validation_and_one_active_job_per_camera(admin_api: Api, env
     from app.models.enums import BackupJobStatus, BackupStream, BackupTrigger
     from app.services import backup
 
-    stuck = backup.create_job(db, env.camera, env.nvr, env.dest, BackupStream.SUB, BackupTrigger.MANUAL, now - timedelta(hours=2), now)
+    stuck = backup.create_job(
+        db, env.camera, env.nvr, env.dest, BackupStream.SUB, BackupTrigger.MANUAL, now - timedelta(hours=2), now
+    )
     stuck.status = BackupJobStatus.RUNNING
     db.commit()
     again = admin_api.post(f"{B}/jobs", json={"camera_id": cam, "destination_id": str(env.dest.id), **window()})
@@ -226,7 +235,9 @@ def test_cancel_and_retry(admin_api: Api, env: Env, db: Any) -> None:
     from app.services import backup
 
     now = utcnow()
-    queued = backup.create_job(db, env.camera, env.nvr, env.dest, BackupStream.SUB, BackupTrigger.MANUAL, now - timedelta(hours=2), now)
+    queued = backup.create_job(
+        db, env.camera, env.nvr, env.dest, BackupStream.SUB, BackupTrigger.MANUAL, now - timedelta(hours=2), now
+    )
     db.commit()
     c = admin_api.post(f"{B}/jobs/{queued.id}/cancel")
     assert c.status_code == 200 and c.json()["status"] == "cancelled"

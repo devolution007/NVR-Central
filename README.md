@@ -2,7 +2,7 @@
 
 Self-hosted web app for managing Dahua NVRs across multiple campuses: central live monitoring and SFTP backups.
 
-**Status:** Phase 3 built (live monitoring on top of Phase 2's NVR checks, camera discovery and campus tunnels). SFTP backups are not built yet. See [docs/PHASES.md](docs/PHASES.md).
+**Status:** Phase 4 built, with a real-hardware problem: the test NVR cuts recording downloads short, so backups of real recordings fail honestly (details in [docs/backups.md](docs/backups.md)). Phase 3 (live monitoring), Phase 2 (NVR inventory, tunnels) are in place. See [docs/PHASES.md](docs/PHASES.md).
 
 | Area | Stack |
 |---|---|
@@ -10,7 +10,7 @@ Self-hosted web app for managing Dahua NVRs across multiple campuses: central li
 | Backend | Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, Pydantic, PostgreSQL |
 | Live view | MediaMTX (HLS), FFmpeg for H.265 to H.264 conversion when a browser needs it, hls.js |
 | Background | Redis, Celery |
-| Later phases | SFTP backups |
+| Backups | paramiko (SFTP), streamed downloads, Celery `backups` queue |
 
 ## Quick start (Windows)
 
@@ -28,7 +28,7 @@ cd backend
 .\.venv\Scripts\uvicorn app.main:app --reload                          # API on http://127.0.0.1:8000
 
 cd ..\backend
-.\.venv\Scripts\celery -A app.workers.celery_app worker --pool=solo --loglevel=info   # background worker
+.\.venv\Scripts\celery -A app.workers.celery_app worker -Q celery,backups --pool=solo --loglevel=info   # background worker (use two workers, -Q celery and -Q backups, so long backups do not block NVR checks)
 
 cd ..\frontend
 npm run dev                                                            # UI on http://localhost:5173
@@ -37,6 +37,8 @@ npm run dev                                                            # UI on h
 NVR connection tests and camera discovery run in the Celery worker, so keep it running (and Redis up), or the Test/Discover buttons report the queue as unavailable. Optional scheduler for periodic health checks: `celery -A app.workers.celery_app beat`.
 
 **Trying it without hardware:** `backend\.venv\Scripts\python scripts\sim_nvr.py` starts a clearly labelled SIMULATED NVR on `127.0.0.1` (HTTP 18080, RTSP 18554, user `admin`, password `secret`). Register it with connection type "Direct LAN", address `127.0.0.1`. This needs `ALLOW_LOOPBACK_NVR_HOSTS=true` (development only, refused in production).
+
+**Backups without an SFTP server:** `backend\.venv\Scripts\python scripts\sim_sftp.py` starts a SIMULATED SFTP server on `127.0.0.1:12222` (user `backup`, password `sftp-secret`).
 
 **Never point tests or experiments at a real NVR with wrong credentials.** Dahua NVRs lock the account after a few failed logins, which also blocks DMSS. The app does not retry rejected credentials automatically.
 
@@ -90,4 +92,5 @@ scripts/    env generation, Windows setup
 - [docs/p2p-compatibility.md](docs/p2p-compatibility.md): why direct P2P is not the primary path
 - [docs/nvr-capabilities.md](docs/nvr-capabilities.md): measured behaviour of the test NVR over its LAN interfaces
 - [docs/live-monitoring.md](docs/live-monitoring.md): how live video works, measured CPU cost, limits, known gaps
+- [docs/backups.md](docs/backups.md): how backups work, guarantees, what the real NVR does, what is not built
 - [docs/architecture.md](docs/architecture.md): Phase 1 design notes and deviations from the spec

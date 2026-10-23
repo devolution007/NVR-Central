@@ -112,6 +112,14 @@ class DestinationOut(BaseModel):
     created_at: datetime
 
 
+class DestinationOption(BaseModel):
+    """What an operator needs to choose a destination: no host, login or key information."""
+
+    id: uuid.UUID
+    name: str
+    enabled: bool
+
+
 # ---------------------------------------------------------------------------------------------------- policies
 class PolicyFields(BaseModel):
     enabled: bool | None = None

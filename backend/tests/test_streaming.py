@@ -173,7 +173,11 @@ def test_an_nvrs_own_limit_overrides_the_server_default(admin_api: Api, db: Any)
         "http_port": 80, "rtsp_port": 554, "username": "viewer user", "enabled": True, "max_live_streams": 10,
     }  # fmt: skip
     put = admin_api.put(f"/api/v1/nvrs/{w.nvr.id}", json=body)
-    assert put.status_code == 200 and put.json()["max_live_streams"] == 10 and put.json()["effective_max_live_streams"] == 10
+    assert (
+        put.status_code == 200
+        and put.json()["max_live_streams"] == 10
+        and put.json()["effective_max_live_streams"] == 10
+    )
     assert put.json()["status"] == "connected"  # changing the limit does not reset the connection status
     assert start(admin_api, w.cams[8]).status_code == 201 and start(admin_api, w.cams[9]).status_code == 201
     blocked = start(admin_api, w.cams[10])

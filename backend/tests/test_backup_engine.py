@@ -166,23 +166,42 @@ def test_only_the_selected_stream_is_backed_up(db: Any, env: Env) -> None:
     assert len(files(db)) == 1 and "/sub/" in env.remote_files()[0]
 
 
-def test_connection_lost_during_download_leaves_no_partial_file_and_the_next_run_completes_it(
+def test_nvr_cutting_a_download_short_fails_that_file_with_a_clear_message_and_the_next_run_retries(
     db: Any, env: Env
 ) -> None:
+    """The real test NVR does this: it closes the connection part-way through a recording."""
     rec = env.add_recording(2, size=700_000)
     env.nvr_sim.download_cut_after = 100_000
     job = env.job(db=db)
     assert backup.run_job(db, job.id) == BackupJobStatus.FAILED
-    db.expire_all()
-    assert "unreachable" in db.get(BackupJob, job.id).message
     row = files(db)[0]
-    assert row.status == BackupFileStatus.PENDING and row.attempts == 1  # will be retried, not lost
-    assert env.remote_files() == [] and not list(backup._staging_root().rglob("*.dav"))
+    assert row.status == BackupFileStatus.FAILED and row.attempts == 1
+    assert "closed the connection after 100000 of 700000 bytes" in (row.error or "")
+    assert env.remote_files() == [] and not list(backup._staging_root().rglob("*.dav"))  # nothing partial anywhere
 
     again = env.job(db=db)
     assert backup.run_job(db, again.id) == BackupJobStatus.SUCCESS
     assert files(db)[0].status == BackupFileStatus.DONE and files(db)[0].attempts == 2
     assert (env.remote / env.remote_files()[0]).read_bytes() == rec.data
+
+
+def test_a_recording_the_nvr_always_cuts_short_is_given_up_after_the_attempt_limit(db: Any, env: Env) -> None:
+    env.add_recording(3)
+    env.policy.checkpoint_at = utcnow() - timedelta(hours=6)
+    db.commit()
+    for _ in range(backup.get_settings().backup_max_attempts):
+        env.nvr_sim.download_cut_after = 1000
+        [job_id] = backup.schedule_due(db)
+        backup.run_job(db, job_id)
+        env.policy.next_run_at = None
+        db.commit()
+    assert files(db)[0].attempts == backup.get_settings().backup_max_attempts
+    requests = len([p for p in env.nvr_sim.requests if "RPC_Loadfile" in p])
+    [job_id] = backup.schedule_due(db)
+    backup.run_job(db, job_id)
+    assert len([p for p in env.nvr_sim.requests if "RPC_Loadfile" in p]) == requests  # no more hammering the NVR
+    db.expire_all()
+    assert db.get(CameraBackupPolicy, env.policy.id).checkpoint_at < utcnow() - timedelta(hours=2)  # still held back
 
 
 def test_sftp_failure_mid_upload_marks_the_file_failed_and_leaves_nothing_behind(db: Any, env: Env) -> None:

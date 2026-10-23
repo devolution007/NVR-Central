@@ -10,7 +10,12 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { NvrsPage } from '@/pages/NvrsPage'
 import { NotFoundPage, PlannedPage } from '@/pages/PlaceholderPages'
+import { BackupHistoryPage, BackupJobsPage } from '@/pages/BackupJobsPage'
+import { BackupSettingsPage } from '@/pages/BackupSettingsPage'
 import { CamerasPage } from '@/pages/CamerasPage'
+import { ManualBackupPage } from '@/pages/ManualBackupPage'
+import { RecordingsPage } from '@/pages/RecordingsPage'
+import { SftpPage } from '@/pages/SftpPage'
 import { ConnectivityPage } from '@/pages/ConnectivityPage'
 import { NvrDetailPage } from '@/pages/NvrDetailPage'
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
@@ -38,6 +43,12 @@ export default function App() {
             <Route path="live" element={lazyPage(<LiveAllPage />)} />
             <Route path="live/favorites" element={lazyPage(<LiveFavoritesPage />)} />
             <Route path="live/layouts" element={lazyPage(<LiveLayoutsPage />)} />
+            <Route path="recordings" element={<RecordingsPage />} />
+            <Route path="backup/settings" element={<BackupSettingsPage />} />
+            <Route path="backup/manual" element={<ManualBackupPage />} />
+            <Route path="backup/jobs" element={<BackupJobsPage />} />
+            <Route path="backup/history" element={<BackupHistoryPage />} />
+            <Route path="sftp" element={<SftpPage />} />
             {PLANNED_PAGES.map((p) => (
               <Route key={p.to} path={p.to.slice(1)} element={<PlannedPage />} />
             ))}

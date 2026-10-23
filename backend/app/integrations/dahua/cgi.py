@@ -13,6 +13,7 @@ from app.integrations.base import (
     ConnectionParams,
     NvrAuthError,
     NvrProtocolError,
+    NvrTransferError,
     NvrUnreachableError,
 )
 
@@ -91,12 +92,16 @@ class DahuaHttp:
         """Stream a GET response to a file in 256 KiB chunks (a recording can be a gigabyte). The partial file is
         removed on any failure, so an incomplete download is never mistaken for a finished one."""
         written = 0
+        expected = ""
+        seen: list[httpx.Response] = []
         try:
             with self._client.stream("GET", self._base + path, timeout=httpx.Timeout(30.0, connect=5.0)) as resp:
+                seen.append(resp)
                 if resp.status_code in (401, 403):
                     raise NvrAuthError("The NVR refused the download (credentials rejected or account locked).")
                 if resp.status_code != 200:
                     raise NvrProtocolError(f"The NVR answered the download with HTTP {resp.status_code}")
+                expected = resp.headers.get("content-length", "")
                 with dest.open("wb") as fh:
                     for chunk in resp.iter_bytes(262144):
                         if cancelled is not None and cancelled():
@@ -105,6 +110,12 @@ class DahuaHttp:
                         written += len(chunk)
                         if progress is not None:
                             progress(written)
+        except httpx.RemoteProtocolError as exc:
+            dest.unlink(missing_ok=True)
+            received = seen[0].num_bytes_downloaded if seen else written
+            raise NvrTransferError(
+                f"The NVR closed the connection after {received} of {expected or 'an unknown number of'} bytes"
+            ) from exc
         except httpx.TimeoutException as exc:
             dest.unlink(missing_ok=True)
             raise NvrUnreachableError("The NVR stopped sending data during the download.") from exc

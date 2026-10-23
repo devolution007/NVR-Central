@@ -47,21 +47,21 @@ export const NAV: NavGroup[] = [
       { label: 'Campus Connectivity', to: '/connectivity', icon: Network, adminOnly: true },
       { label: 'NVR Management', to: '/nvrs', icon: Server },
       { label: 'Camera Management', to: '/cameras', icon: Camera },
-      { label: 'Recording Browser', to: '/recordings', icon: Film, phase: 4 },
+      { label: 'Recording Browser', to: '/recordings', icon: Film },
     ],
   },
   {
     label: 'Backup Management',
     items: [
-      { label: 'Auto Backup Settings', to: '/backup/settings', icon: DatabaseBackup, phase: 4 },
-      { label: 'Manual Backup', to: '/backup/manual', icon: DatabaseBackup, phase: 4 },
-      { label: 'Backup Jobs', to: '/backup/jobs', icon: Activity, phase: 4 },
-      { label: 'Backup History', to: '/backup/history', icon: Activity, phase: 4 },
+      { label: 'Auto Backup Settings', to: '/backup/settings', icon: DatabaseBackup },
+      { label: 'Manual Backup', to: '/backup/manual', icon: DatabaseBackup },
+      { label: 'Backup Jobs', to: '/backup/jobs', icon: Activity },
+      { label: 'Backup History', to: '/backup/history', icon: Activity },
     ],
   },
   {
     items: [
-      { label: 'SFTP Destinations', to: '/sftp', icon: HardDrive, phase: 4 },
+      { label: 'SFTP Destinations', to: '/sftp', icon: HardDrive, adminOnly: true },
       { label: 'Users & Permissions', to: '/users', icon: Users, phase: 5, adminOnly: true },
       { label: 'Notifications', to: '/notifications', icon: Bell, phase: 5 },
       { label: 'System Settings', to: '/settings', icon: Settings, phase: 5 },

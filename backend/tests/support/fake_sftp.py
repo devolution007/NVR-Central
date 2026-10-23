@@ -131,7 +131,7 @@ class _Auth(paramiko.ServerInterface):
 
 
 class FakeSftpServer:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, port: int = 0) -> None:
         self.root = root
         self.host_key = paramiko.RSAKey.generate(2048)
         self.fingerprint = fingerprint(self.host_key)
@@ -142,7 +142,7 @@ class FakeSftpServer:
         self.accepting = True
         self._sock = socket.socket()
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._sock.bind(("127.0.0.1", 0))
+        self._sock.bind(("127.0.0.1", port))
         self._sock.listen(8)
         self.port: int = self._sock.getsockname()[1]
         self._stop = False
@@ -172,11 +172,16 @@ class FakeSftpServer:
             if not self.accepting:
                 client.close()
                 continue
-            t = paramiko.Transport(client)
-            t.add_server_key(self.host_key)
-            t.set_subsystem_handler("sftp", SFTPServer, _Sftp)
-            self._transports.append(t)
-            try:
-                t.start_server(server=_Auth(self))
-            except paramiko.SSHException:
-                continue
+            # One thread per connection: a client that hangs up mid-handshake (e.g. after seeing a wrong host key)
+            # must not block the next client.
+            threading.Thread(target=self._serve, args=(client,), daemon=True).start()
+
+    def _serve(self, client: socket.socket) -> None:
+        t = paramiko.Transport(client)
+        t.add_server_key(self.host_key)
+        t.set_subsystem_handler("sftp", SFTPServer, _Sftp)
+        self._transports.append(t)
+        try:
+            t.start_server(server=_Auth(self))
+        except (paramiko.SSHException, EOFError, OSError):
+            t.close()

@@ -34,6 +34,10 @@ class NvrProtocolError(NvrError):
     """The device answered, but not in a way we understand (not a Dahua NVR, unexpected payload)."""
 
 
+class NvrTransferError(NvrError):
+    """The NVR answered but cut a transfer short (observed on the test NVR: recording downloads stop part-way)."""
+
+
 class NvrUnsupportedError(NvrError):
     """This adapter or device does not support the requested operation."""
 
